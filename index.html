@@ -1,4 +1,4 @@
-c<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -21,8 +21,9 @@ c<!DOCTYPE html>
   --accent: #CDFF50;
   --accent-dim: #CDFF5040;
   --text: #ECECEC;
-  --text-muted: #f9f2ff;
-  --text-dim: #f0e1fc;
+  --text-muted: #AAAAAA;
+  --text-dim: #888888;
+  --text-subtle: #6B6B6B;
   --danger: #FF5252;
   --danger-bg: #2A1212;
   --success: #50FF8A;
@@ -347,7 +348,7 @@ function drawChart(canvas, data, key, color, labels) {
   }
 
   // X labels
-  ctx.fillStyle = '#4A4A4A'; ctx.font = '10px IBM Plex Mono';
+  ctx.fillStyle = '#6B6B6B'; ctx.font = '10px IBM Plex Mono';
   ctx.textAlign = 'center';
   data.forEach((d, i) => {
     const x = pad.left + (plotW / Math.max(data.length - 1, 1)) * i;
@@ -433,7 +434,7 @@ function render() {
 
 function renderLoading() {
   return h('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' } },
-    h('span', { style: { color: '#7A7A7A', fontSize: '11px' } }, 'loading...')
+    h('span', { style: { color: 'var(--text-subtle)', fontSize: '11px' } }, 'loading...')
   );
 }
 
@@ -444,7 +445,7 @@ function renderHome() {
 
   // Title
   frag.appendChild(h('div', { style: { marginBottom: '32px' } },
-    h('div', { style: { fontSize: '10px', color: '#4A4A4A', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '6px' } }, 'TRACK · COMPARE · GROW'),
+    h('div', { style: { fontSize: '10px', color: 'var(--text-subtle)', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '6px' } }, 'TRACK · COMPARE · GROW'),
     h('h1', { style: { fontSize: '34px', letterSpacing: '-1.5px', lineHeight: '1.05' } },
       'PROGRESSIVE', h('br'), h('span', { style: { color: 'var(--accent)' } }, 'OVERLOAD')
     )
@@ -456,12 +457,12 @@ function renderHome() {
     card.appendChild(h('div', { className: 'label' }, 'last session'));
     card.appendChild(h('div', { style: { fontSize: '15px', fontWeight: 700 } }, last.workoutType));
     const d = new Date(last.date);
-    card.appendChild(h('div', { style: { fontSize: '11px', color: '#7A7A7A', marginTop: '2px' } },
+    card.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' } },
       `${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${last.exercises.length} exercises`));
     if (last.notes) {
-      card.appendChild(h('div', { style: { fontSize: '11px', color: '#4A4A4A', marginTop: '6px', fontStyle: 'italic', borderTop: '1px solid var(--border)', paddingTop: '6px' } }, `"${last.notes}"`));
+      card.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-dim)', marginTop: '6px', fontStyle: 'italic', borderTop: '1px solid var(--border)', paddingTop: '6px' } }, `"${last.notes}"`));
     }
-    card.appendChild(h('div', { style: { fontSize: '10px', color: '#4A4A4A', marginTop: '6px' } },
+    card.appendChild(h('div', { style: { fontSize: '10px', color: 'var(--text-subtle)', marginTop: '6px' } },
       `${state.history.length} total workout${state.history.length !== 1 ? 's' : ''} logged`));
     frag.appendChild(card);
   }
@@ -481,19 +482,29 @@ function renderSelectType() {
   const frag = h('div', { className: 'fade-in' });
   frag.appendChild(h('button', { className: 'back-btn', onClick: () => setState({ screen: 'home' }) }, '← back'));
   frag.appendChild(h('h1', null, 'Select Workout'));
-  frag.appendChild(h('p', { style: { color: '#7A7A7A', fontSize: '11px', margin: '4px 0 20px' } }, 'What are we hitting today?'));
+  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 20px' } }, 'What are we hitting today?'));
+
+  // Sort types: least recently done first (never done → top)
+  const types = Object.keys(TEMPLATES).sort((a, b) => {
+    const lastA = getLastForType(state.history, a);
+    const lastB = getLastForType(state.history, b);
+    if (!lastA && !lastB) return 0;
+    if (!lastA) return -1;
+    if (!lastB) return 1;
+    return new Date(lastA.date) - new Date(lastB.date);
+  });
 
   const list = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } });
-  for (const type of Object.keys(TEMPLATES)) {
+  for (const type of types) {
     const last = getLastForType(state.history, type);
     const card = h('button', { className: 'card card-btn', onClick: () => {
       const exList = last ? last.exercises.map(e => ({ name: e.name, type: e.type })) : TEMPLATES[type];
       setState({ screen: 'editList', workoutType: type, exerciseList: JSON.parse(JSON.stringify(exList)) });
     }});
-    card.appendChild(h('div', { style: { fontSize: '16px', fontWeight: 800, letterSpacing: '-0.3px' } }, type));
-    card.appendChild(h('div', { style: { fontSize: '11px', color: '#7A7A7A', marginTop: '3px' } },
+    card.appendChild(h('div', { style: { fontSize: '16px', fontWeight: 800, letterSpacing: '-0.3px', color: 'var(--text)' } }, type));
+    card.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px' } },
       last ? `Last: ${new Date(last.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${last.exercises.length} exercises` : 'No sessions yet'));
-    if (last?.notes) card.appendChild(h('div', { style: { fontSize: '10px', color: '#4A4A4A', marginTop: '4px', fontStyle: 'italic' } }, `Note: "${last.notes}"`));
+    if (last?.notes) card.appendChild(h('div', { style: { fontSize: '10px', color: 'var(--text-dim)', marginTop: '4px', fontStyle: 'italic' } }, `"${last.notes}"`));
     list.appendChild(card);
   }
   frag.appendChild(list);
@@ -507,14 +518,14 @@ function renderEditList() {
 
   frag.appendChild(h('button', { className: 'back-btn', onClick: () => setState({ screen: 'selectType' }) }, '← back'));
   frag.appendChild(h('h1', null, state.workoutType));
-  frag.appendChild(h('p', { style: { color: '#7A7A7A', fontSize: '11px', margin: '4px 0 20px' } },
+  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 20px' } },
     last ? `Last: ${new Date(last.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}` : 'First session — let\'s go!'));
 
   // Note from last session
   if (last?.notes) {
     const note = h('div', { style: { background: '#CDFF5010', border: '1px solid #CDFF5025', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px' } });
     note.appendChild(h('div', { style: { fontSize: '9px', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '3px' } }, 'note from last session'));
-    note.appendChild(h('div', { style: { fontSize: '12px' } }, last.notes));
+    note.appendChild(h('div', { style: { fontSize: '12px', color: 'var(--text)' } }, last.notes));
     frag.appendChild(note);
   }
 
@@ -523,17 +534,17 @@ function renderEditList() {
   state.exerciseList.forEach((ex, i) => {
     const row = h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px 12px' } });
     const left = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 } });
-    left.appendChild(h('span', { style: { fontSize: '11px', color: '#4A4A4A', width: '16px', flexShrink: 0 } }, String(i + 1)));
-    left.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, ex.name));
+    left.appendChild(h('span', { style: { fontSize: '11px', color: 'var(--text-subtle)', width: '16px', flexShrink: 0 } }, String(i + 1)));
+    left.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' } }, ex.name));
     left.appendChild(h('span', { className: `pill ${pillClass(ex.type)}` }, pillLabel(ex.type)));
     row.appendChild(left);
 
     const controls = h('div', { style: { display: 'flex', gap: '2px', flexShrink: 0 } });
-    controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: i === 0 ? '#4A4A4A' : '#7A7A7A', fontSize: '11px', padding: '2px 4px', fontFamily: 'var(--font)' },
+    controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: i === 0 ? 'var(--text-subtle)' : 'var(--text-muted)', fontSize: '11px', padding: '2px 4px', fontFamily: 'var(--font)' },
       onClick: () => { if (i > 0) { const l = [...state.exerciseList]; [l[i-1], l[i]] = [l[i], l[i-1]]; setState({ exerciseList: l }); } } }, '↑'));
-    controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: i === state.exerciseList.length - 1 ? '#4A4A4A' : '#7A7A7A', fontSize: '11px', padding: '2px 4px', fontFamily: 'var(--font)' },
+    controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: i === state.exerciseList.length - 1 ? 'var(--text-subtle)' : 'var(--text-muted)', fontSize: '11px', padding: '2px 4px', fontFamily: 'var(--font)' },
       onClick: () => { if (i < state.exerciseList.length - 1) { const l = [...state.exerciseList]; [l[i], l[i+1]] = [l[i+1], l[i]]; setState({ exerciseList: l }); } } }, '↓'));
-    controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: '#4A4A4A', fontSize: '14px', padding: '2px 6px', fontFamily: 'var(--font)' },
+    controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '14px', padding: '2px 6px', fontFamily: 'var(--font)' },
       onClick: () => setState({ exerciseList: state.exerciseList.filter((_, j) => j !== i) }) }, '×'));
     row.appendChild(controls);
     listEl.appendChild(row);
@@ -585,9 +596,20 @@ function renderLogging() {
   pbar.appendChild(h('div', { className: 'progress-bar-fill', style: { width: progress + '%' } }));
   frag.appendChild(pbar);
 
-  frag.appendChild(h('button', { className: 'back-btn', onClick: () => setState({ screen: 'editList' }) }, '← back'));
+  // Top row: back + undo
+  const topRow = h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' } });
+  topRow.appendChild(h('button', { className: 'back-btn', style: { margin: 0 }, onClick: () => setState({ screen: 'editList' }) }, '← back'));
+  const canUndo = result.sets.length > 0 || (weightConfirmed && result.sets.length === 0) || exIdx > 0;
+  if (canUndo) {
+    topRow.appendChild(h('button', {
+      style: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '11px', fontFamily: 'var(--font)', padding: '4px 0', cursor: 'pointer' },
+      onClick: undoAction
+    }, '↩ undo'));
+  }
+  frag.appendChild(topRow);
+
   frag.appendChild(h('h1', null, ex.name));
-  frag.appendChild(h('p', { style: { color: '#7A7A7A', fontSize: '11px', margin: '4px 0 16px' } }, `Exercise ${exIdx + 1} of ${exerciseList.length}`));
+  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 16px' } }, `Exercise ${exIdx + 1} of ${exerciseList.length}`));
 
   // Badges
   const badges = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' } });
@@ -603,15 +625,15 @@ function renderLogging() {
     lastSets.forEach((s, i) => {
       const cls = i === setIdx ? 'set-box set-box-active' : 'set-box';
       const box = h('div', { className: cls });
-      box.appendChild(h('div', { style: { fontSize: '14px', fontWeight: 700, color: i === setIdx ? 'var(--accent)' : '#7A7A7A' } }, fmtVal(s, ex.type)));
-      box.appendChild(h('div', { style: { fontSize: '9px', color: '#4A4A4A', marginTop: '1px' } }, `Set ${i + 1}`));
+      box.appendChild(h('div', { style: { fontSize: '14px', fontWeight: 700, color: i === setIdx ? 'var(--accent)' : 'var(--text-muted)' } }, fmtVal(s, ex.type)));
+      box.appendChild(h('div', { style: { fontSize: '9px', color: 'var(--text-dim)', marginTop: '1px' } }, `Set ${i + 1}`));
       setsRow.appendChild(box);
     });
     lastBox.appendChild(setsRow);
     frag.appendChild(lastBox);
   }
 
-  // Current sets
+  // Current sets (with +/- delta)
   if (result.sets.length > 0) {
     const curBox = h('div', { style: { marginBottom: '12px' } });
     curBox.appendChild(h('div', { className: 'label' }, 'this time'));
@@ -620,7 +642,17 @@ function renderLogging() {
       const cls = s === 'skip' ? 'set-box set-box-skip' : 'set-box set-box-done';
       const box = h('div', { className: cls });
       box.appendChild(h('div', { style: { fontSize: '14px', fontWeight: 700, color: s === 'skip' ? 'var(--warn)' : 'var(--success)' } }, fmtVal(s, ex.type)));
-      box.appendChild(h('div', { style: { fontSize: '9px', color: '#4A4A4A', marginTop: '1px' } }, `Set ${i + 1}`));
+      box.appendChild(h('div', { style: { fontSize: '9px', color: 'var(--text-dim)', marginTop: '1px' } }, `Set ${i + 1}`));
+
+      // +/- delta vs last session
+      const lastVal = lastSets[i];
+      if (typeof s === 'number' && typeof lastVal === 'number') {
+        const delta = s - lastVal;
+        const deltaColor = delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-subtle)';
+        const deltaText = delta > 0 ? `+${delta}` : delta === 0 ? '=' : String(delta);
+        box.appendChild(h('div', { style: { fontSize: '9px', color: deltaColor, marginTop: '1px', fontWeight: 700 } }, deltaText));
+      }
+
       setsRow.appendChild(box);
     });
     curBox.appendChild(setsRow);
@@ -628,7 +660,7 @@ function renderLogging() {
   }
 
   if (needsWeight) {
-    frag.appendChild(h('div', { style: { fontSize: '11px', color: '#7A7A7A', marginBottom: '6px' } },
+    frag.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' } },
       `Weight${lastData?.weight ? ` (last: ${lastData.weight} ${lastData.weightUnit || 'lbs'})` : ''}`));
     const row = h('div', { style: { display: 'flex', gap: '8px', marginBottom: '12px' } });
     const inp = h('input', { className: 'input', type: 'number', inputMode: 'numeric', placeholder: 'Weight',
@@ -643,7 +675,7 @@ function renderLogging() {
     const unitToggle = h('div', { style: { display: 'flex', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' } });
     ['lbs', 'kg'].forEach(u => {
       unitToggle.appendChild(h('button', {
-        style: { padding: '8px 12px', background: state.weightUnit === u ? '#CDFF5025' : 'var(--surface)', color: state.weightUnit === u ? 'var(--accent)' : '#7A7A7A', border: 'none', fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font)' },
+        style: { padding: '8px 12px', background: state.weightUnit === u ? '#CDFF5025' : 'var(--surface)', color: state.weightUnit === u ? 'var(--accent)' : 'var(--text-muted)', border: 'none', fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font)' },
         onClick: () => { state.weightUnit = u; render(); }
       }, u));
     });
@@ -653,7 +685,7 @@ function renderLogging() {
     frag.appendChild(h('button', { className: 'btn btn-primary', onClick: confirmWeightAction }, 'CONFIRM WEIGHT →'));
     setTimeout(() => inp.focus(), 50);
   } else {
-    frag.appendChild(h('div', { style: { fontSize: '11px', color: '#7A7A7A', marginBottom: '6px' } }, `Set ${setIdx + 1} of ${DEFAULT_SETS}`));
+    frag.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' } }, `Set ${setIdx + 1} of ${DEFAULT_SETS}`));
     const inp = h('input', { className: 'input', type: isTimed ? 'text' : 'number',
       inputMode: isTimed ? 'text' : 'numeric',
       placeholder: isTimed ? 'e.g. 1m15s or 75' : 'Reps',
@@ -672,6 +704,41 @@ function renderLogging() {
     btns.appendChild(row2);
     frag.appendChild(btns);
     setTimeout(() => inp.focus(), 50);
+  }
+
+  // Coming up next
+  if (exIdx + 1 < exerciseList.length) {
+    const nextEx = exerciseList[exIdx + 1];
+    const nextHist = getExHistory(history, nextEx.name);
+    const nextLast = nextHist.length > 0 ? nextHist[nextHist.length - 1] : null;
+
+    const nextCard = h('div', { style: {
+      marginTop: '24px',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: '8px',
+      padding: '10px 12px',
+      opacity: '0.75',
+    }});
+    nextCard.appendChild(h('div', { className: 'label', style: { marginBottom: '4px' } }, 'coming up next'));
+
+    const nameRow = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } });
+    nameRow.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 700, color: 'var(--text)' } }, nextEx.name));
+    nameRow.appendChild(h('span', { className: `pill ${pillClass(nextEx.type)}` }, pillLabel(nextEx.type)));
+    nextCard.appendChild(nameRow);
+
+    if (nextLast) {
+      const parts = [];
+      if (nextLast.weight) parts.push(`${nextLast.weight} ${nextLast.weightUnit || 'lbs'}`);
+      if (nextLast.sets?.length) parts.push(nextLast.sets.map(s => fmtVal(s, nextEx.type)).join(' / '));
+      if (parts.length > 0) {
+        nextCard.appendChild(h('div', { style: { fontSize: '10px', color: 'var(--text-dim)', marginTop: '3px' } }, parts.join(' · ')));
+      }
+    } else {
+      nextCard.appendChild(h('div', { style: { fontSize: '10px', color: 'var(--text-subtle)', marginTop: '3px' } }, 'no previous data'));
+    }
+
+    frag.appendChild(nextCard);
   }
 
   return frag;
@@ -722,20 +789,66 @@ function advanceExercise(results) {
   }
 }
 
+function undoAction() {
+  const { exIdx, results, exerciseList } = state;
+  const result = results[exIdx];
+
+  // If weight was confirmed but no sets logged yet, un-confirm weight
+  if (state.weightConfirmed && result.sets.length === 0) {
+    setState({ weightConfirmed: false });
+    return;
+  }
+
+  // If current exercise has logged sets, pop the last one
+  if (result.sets.length > 0) {
+    const newResults = JSON.parse(JSON.stringify(results));
+    newResults[exIdx].sets.pop();
+    const newSetIdx = newResults[exIdx].sets.length;
+    setState({ results: newResults, setIdx: newSetIdx, inputVal: '' });
+    return;
+  }
+
+  // No sets logged for current exercise, go back to previous exercise
+  if (exIdx > 0) {
+    const newResults = JSON.parse(JSON.stringify(results));
+    if (newResults[exIdx - 1].sets.length > 0) {
+      newResults[exIdx - 1].sets.pop();
+    }
+    const prevSets = newResults[exIdx - 1].sets;
+    const prevEx = exerciseList[exIdx - 1];
+    setState({
+      results: newResults,
+      exIdx: exIdx - 1,
+      setIdx: prevSets.length,
+      inputVal: '',
+      weightConfirmed: prevEx.type !== 'weighted' || newResults[exIdx - 1].weight != null,
+    });
+    return;
+  }
+
+  // First exercise with no sets, go back to edit list
+  setState({ screen: 'editList' });
+}
+
 // ─── REVIEW ───
 function renderReview() {
   const frag = h('div', { className: 'fade-in' });
   frag.appendChild(h('button', { className: 'back-btn', onClick: () => setState({ screen: 'logging' }) }, '← back'));
   frag.appendChild(h('h1', null, 'Review'));
-  frag.appendChild(h('p', { style: { color: '#7A7A7A', fontSize: '11px', margin: '4px 0 20px' } }, `${state.workoutType} — confirm your entries`));
+  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 20px' } }, `${state.workoutType} — confirm your entries`));
 
   const list = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' } });
   state.results.forEach((ex, eIdx) => {
+    // Get last session data for delta comparison
+    const hist = getExHistory(state.history, ex.name);
+    const lastData = hist.length > 0 ? hist[hist.length - 1] : null;
+    const lastSets = lastData?.sets || [];
+
     const card = h('div', { className: 'card', style: { padding: '12px' } });
     const header = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' } });
-    header.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 700 } }, ex.name));
+    header.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 700, color: 'var(--text)' } }, ex.name));
     header.appendChild(h('span', { className: `pill ${pillClass(ex.type)}` }, pillLabel(ex.type)));
-    if (ex.weight) header.appendChild(h('span', { style: { fontSize: '10px', color: '#7A7A7A' } }, `@ ${ex.weight} ${ex.weightUnit}`));
+    if (ex.weight) header.appendChild(h('span', { style: { fontSize: '10px', color: 'var(--text-muted)' } }, `@ ${ex.weight} ${ex.weightUnit}`));
     card.appendChild(header);
 
     const setsRow = h('div', { style: { display: 'flex', gap: '5px' } });
@@ -756,7 +869,17 @@ function renderReview() {
         }
       });
       btn.appendChild(h('div', { style: { fontSize: '14px', fontWeight: 700, color: s === 'skip' ? 'var(--warn)' : 'var(--text)' } }, fmtVal(s, ex.type)));
-      btn.appendChild(h('div', { style: { fontSize: '8px', color: '#4A4A4A', marginTop: '1px' } }, `Set ${sIdx + 1}`));
+      btn.appendChild(h('div', { style: { fontSize: '8px', color: 'var(--text-dim)', marginTop: '1px' } }, `Set ${sIdx + 1}`));
+
+      // +/- delta vs last session
+      const lastVal = lastSets[sIdx];
+      if (typeof s === 'number' && typeof lastVal === 'number') {
+        const delta = s - lastVal;
+        const deltaColor = delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-subtle)';
+        const deltaText = delta > 0 ? `+${delta}` : delta === 0 ? '=' : String(delta);
+        btn.appendChild(h('div', { style: { fontSize: '8px', color: deltaColor, marginTop: '1px', fontWeight: 700 } }, deltaText));
+      }
+
       setsRow.appendChild(btn);
     });
     card.appendChild(setsRow);
@@ -764,7 +887,7 @@ function renderReview() {
   });
   frag.appendChild(list);
 
-  frag.appendChild(h('div', { style: { fontSize: '10px', color: '#4A4A4A', textAlign: 'center', marginBottom: '14px' } }, 'tap any value to edit · skipped sets stay as-is'));
+  frag.appendChild(h('div', { style: { fontSize: '10px', color: 'var(--text-dim)', textAlign: 'center', marginBottom: '14px' } }, 'tap any value to edit · skipped sets stay as-is'));
 
   // Notes
   const notesLabel = h('div', { className: 'label' }, 'session notes (optional)');
@@ -808,14 +931,14 @@ function renderProgress() {
   }
   let exList = [...map.values()].sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate));
 
-  frag.appendChild(h('p', { style: { color: '#7A7A7A', fontSize: '11px', margin: '4px 0 14px' } }, `${exList.length} exercises tracked`));
+  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 14px' } }, `${exList.length} exercises tracked`));
 
   // Filter
   const filterRow = h('div', { style: { display: 'flex', gap: '5px', marginBottom: '14px', flexWrap: 'wrap' } });
   [null, 'weighted', 'reps', 'timed'].forEach(t => {
     const active = state.progressFilter === t;
     filterRow.appendChild(h('button', {
-      style: { fontFamily: 'var(--font)', fontSize: '10px', padding: '5px 10px', border: active ? '1px solid var(--accent)' : '1px solid var(--border)', background: active ? '#CDFF5022' : 'transparent', color: active ? 'var(--accent)' : '#7A7A7A', borderRadius: '6px', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 700 },
+      style: { fontFamily: 'var(--font)', fontSize: '10px', padding: '5px 10px', border: active ? '1px solid var(--accent)' : '1px solid var(--border)', background: active ? '#CDFF5022' : 'transparent', color: active ? 'var(--accent)' : 'var(--text-muted)', borderRadius: '6px', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 700 },
       onClick: () => setState({ progressFilter: t })
     }, t || 'all'));
   });
@@ -831,13 +954,13 @@ function renderProgress() {
     const row = h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } });
     const left = h('div');
     const nameRow = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } });
-    nameRow.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 700 } }, ex.name));
+    nameRow.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 700, color: 'var(--text)' } }, ex.name));
     nameRow.appendChild(h('span', { className: `pill ${pillClass(ex.type)}` }, pillLabel(ex.type)));
     left.appendChild(nameRow);
-    left.appendChild(h('div', { style: { fontSize: '10px', color: '#7A7A7A', marginTop: '2px' } },
+    left.appendChild(h('div', { style: { fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' } },
       `${hist.length} session${hist.length !== 1 ? 's' : ''}${last?.weight ? ` · last: ${last.weight}${last.weightUnit || 'lbs'}` : ''}`));
     row.appendChild(left);
-    row.appendChild(h('span', { style: { color: '#4A4A4A', fontSize: '16px' } }, '→'));
+    row.appendChild(h('span', { style: { color: 'var(--text-dim)', fontSize: '16px' } }, '→'));
     card.appendChild(row);
     listEl.appendChild(card);
   });
@@ -855,7 +978,7 @@ function renderProgressDetail(frag) {
 
   frag.appendChild(h('button', { className: 'back-btn', onClick: () => setState({ progressSelected: null }) }, '← back'));
   frag.appendChild(h('h1', null, name));
-  frag.appendChild(h('p', { style: { color: '#7A7A7A', fontSize: '11px', margin: '4px 0 16px' } }, `${data.length} session${data.length !== 1 ? 's' : ''} logged`));
+  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 16px' } }, `${data.length} session${data.length !== 1 ? 's' : ''} logged`));
   frag.appendChild(h('div', { style: { marginBottom: '16px' } }, h('span', { className: `pill ${pillClass(exInfo.type)}` }, pillLabel(exInfo.type))));
 
   const chartData = data.map(d => {
@@ -886,10 +1009,10 @@ function renderProgressDetail(frag) {
   frag.appendChild(h('div', { className: 'label' }, 'Session Log'));
   data.slice().reverse().forEach(d => {
     const row = h('div', { style: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px 12px', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' } });
-    row.appendChild(h('span', { style: { color: '#7A7A7A' } }, new Date(d.date).toLocaleDateString()));
+    row.appendChild(h('span', { style: { color: 'var(--text-muted)' } }, new Date(d.date).toLocaleDateString()));
     const right = h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } });
     if (d.weight) right.appendChild(h('span', { style: { color: 'var(--warn)' } }, `${d.weight}${d.weightUnit || 'lbs'}`));
-    right.appendChild(h('span', null, d.sets.map(s => fmtVal(s, exInfo.type)).join(' / ')));
+    right.appendChild(h('span', { style: { color: 'var(--text)' } }, d.sets.map(s => fmtVal(s, exInfo.type)).join(' / ')));
     row.appendChild(right);
     frag.appendChild(row);
   });
