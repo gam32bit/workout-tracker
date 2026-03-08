@@ -297,6 +297,22 @@ function getExHistory(history, name) {
   return r;
 }
 
+function buildDelta(curVal, curWeight, lastVal, lastWeight, type) {
+  if (typeof curVal !== 'number' || typeof lastVal !== 'number') return null;
+  let delta, text;
+  if (type === 'weighted' && typeof curWeight === 'number' && typeof lastWeight === 'number') {
+    const curVol = curVal * curWeight;
+    const lastVol = lastVal * lastWeight;
+    delta = curVol - lastVol;
+    text = delta > 0 ? `+${delta} vol` : delta === 0 ? '= vol' : `${delta} vol`;
+  } else {
+    delta = curVal - lastVal;
+    text = delta > 0 ? `+${delta}` : delta === 0 ? '=' : String(delta);
+  }
+  const color = delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-subtle)';
+  return { text, color };
+}
+
 function dateLbl(iso) { const d = new Date(iso); return `${d.getMonth()+1}/${d.getDate()}`; }
 
 function pillClass(type) { return type === 'weighted' ? 'pill-weight' : type === 'timed' ? 'pill-timed' : 'pill-reps'; }
@@ -666,12 +682,8 @@ function renderLogging() {
 
       // +/- delta vs last session
       const lastVal = lastSets[i];
-      if (typeof s === 'number' && typeof lastVal === 'number') {
-        const delta = s - lastVal;
-        const deltaColor = delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-subtle)';
-        const deltaText = delta > 0 ? `+${delta}` : delta === 0 ? '=' : String(delta);
-        box.appendChild(h('div', { style: { fontSize: '9px', color: deltaColor, marginTop: '1px', fontWeight: 700 } }, deltaText));
-      }
+      const d = buildDelta(s, result.weight, lastVal, lastData?.weight, ex.type);
+      if (d) box.appendChild(h('div', { style: { fontSize: '9px', color: d.color, marginTop: '1px', fontWeight: 700 } }, d.text));
 
       setsRow.appendChild(box);
     });
@@ -706,12 +718,17 @@ function renderLogging() {
     setTimeout(() => inp.focus(), 50);
   } else {
     frag.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' } }, `Set ${setIdx + 1} of ${DEFAULT_SETS}`));
+    const prevNumeric = [...result.sets].reverse().find(s => typeof s === 'number');
+    const prefill = prevNumeric != null ? (isTimed ? formatTime(prevNumeric) : String(prevNumeric)) : '';
+    if (prefill) state.inputVal = prefill;
     const inp = h('input', { className: 'input', type: isTimed ? 'text' : 'number',
       inputMode: isTimed ? 'text' : 'numeric',
       placeholder: isTimed ? 'e.g. 1m15s or 75' : 'Reps',
+      value: prefill,
       style: { marginBottom: '10px' } });
     inp.addEventListener('input', (e) => { state.inputVal = e.target.value; });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && state.inputVal) logSetAction(); });
+    inp.addEventListener('focus', () => inp.select());
     frag.appendChild(inp);
 
     const btns = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
@@ -918,12 +935,8 @@ function renderReview() {
 
       // +/- delta vs last session
       const lastVal = lastSets[sIdx];
-      if (typeof s === 'number' && typeof lastVal === 'number') {
-        const delta = s - lastVal;
-        const deltaColor = delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-subtle)';
-        const deltaText = delta > 0 ? `+${delta}` : delta === 0 ? '=' : String(delta);
-        btn.appendChild(h('div', { style: { fontSize: '8px', color: deltaColor, marginTop: '1px', fontWeight: 700 } }, deltaText));
-      }
+      const d = buildDelta(s, ex.weight, lastVal, lastData?.weight, ex.type);
+      if (d) btn.appendChild(h('div', { style: { fontSize: '8px', color: d.color, marginTop: '1px', fontWeight: 700 } }, d.text));
 
       setsRow.appendChild(btn);
     });
