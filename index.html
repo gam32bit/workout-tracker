@@ -411,6 +411,9 @@ let state = {
   showDatePicker: false,
   progressFilter: null,
   progressSelected: null,
+  viewingWorkout: null,
+  viewingWorkoutFrom: 'home',
+  allWorkoutsLimit: 10,
 };
 
 function setState(partial) {
@@ -431,6 +434,8 @@ function render() {
     case 'logging': app.appendChild(renderLogging()); break;
     case 'review': app.appendChild(renderReview()); break;
     case 'progress': app.appendChild(renderProgress()); break;
+    case 'workoutDetail': app.appendChild(renderWorkoutDetail()); break;
+    case 'allWorkouts': app.appendChild(renderAllWorkouts()); break;
   }
 }
 
@@ -442,39 +447,52 @@ function renderLoading() {
 
 // ─── HOME ───
 function renderHome() {
-  const last = state.history.length > 0 ? state.history[state.history.length - 1] : null;
   const frag = h('div', { className: 'fade-in' });
 
   // Title
-  frag.appendChild(h('div', { style: { marginBottom: '32px' } },
+  frag.appendChild(h('div', { style: { marginBottom: '24px' } },
     h('div', { style: { fontSize: '10px', color: 'var(--text-subtle)', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '6px' } }, 'TRACK · COMPARE · GROW'),
     h('h1', { style: { fontSize: '34px', letterSpacing: '-1.5px', lineHeight: '1.05' } },
       'PROGRESSIVE', h('br'), h('span', { style: { color: 'var(--accent)' } }, 'OVERLOAD')
     )
   ));
 
-  // Last session card
-  if (last) {
-    const card = h('div', { className: 'card', style: { marginBottom: '24px' } });
-    card.appendChild(h('div', { className: 'label' }, 'last session'));
-    card.appendChild(h('div', { style: { fontSize: '15px', fontWeight: 700 } }, last.workoutType));
-    const d = new Date(last.date);
-    card.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' } },
-      `${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${last.exercises.length} exercises`));
-    if (last.notes) {
-      card.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-dim)', marginTop: '6px', fontStyle: 'italic', borderTop: '1px solid var(--border)', paddingTop: '6px' } }, `"${last.notes}"`));
-    }
-    card.appendChild(h('div', { style: { fontSize: '10px', color: 'var(--text-subtle)', marginTop: '6px' } },
-      `${state.history.length} total workout${state.history.length !== 1 ? 's' : ''} logged`));
-    frag.appendChild(card);
-  }
-
-  const btns = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } });
+  // Action buttons at top
+  const btns = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' } });
   btns.appendChild(h('button', { className: 'btn btn-primary', onClick: () => setState({ screen: 'selectType' }) }, '▶ LOG WORKOUT'));
   const progBtn = h('button', { className: 'btn btn-secondary', onClick: () => setState({ screen: 'progress', progressFilter: null, progressSelected: null }) }, '📊 VIEW PROGRESS');
   if (state.history.length === 0) { progBtn.disabled = true; }
   btns.appendChild(progBtn);
   frag.appendChild(btns);
+
+  // Recent workouts (up to 5, newest first)
+  if (state.history.length > 0) {
+    const sorted = [...state.history].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const recent = sorted.slice(0, 5);
+
+    frag.appendChild(h('div', { className: 'label', style: { marginBottom: '8px' } }, 'recent workouts'));
+
+    const list = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' } });
+    recent.forEach(w => {
+      const card = h('button', { className: 'card card-btn', style: { padding: '12px' },
+        onClick: () => setState({ screen: 'workoutDetail', viewingWorkout: w, viewingWorkoutFrom: 'home' }) });
+      const top = h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } });
+      top.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 700, color: 'var(--text)' } }, w.workoutType));
+      top.appendChild(h('span', { style: { color: 'var(--text-dim)', fontSize: '16px' } }, '→'));
+      card.appendChild(top);
+      const d = new Date(w.date);
+      card.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px' } },
+        `${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${w.exercises.length} exercises`));
+      if (w.notes) card.appendChild(h('div', { style: { fontSize: '10px', color: 'var(--text-dim)', marginTop: '4px', fontStyle: 'italic' } }, `"${w.notes}"`));
+      list.appendChild(card);
+    });
+    frag.appendChild(list);
+
+    if (state.history.length > 5) {
+      frag.appendChild(h('button', { className: 'btn btn-secondary',
+        onClick: () => setState({ screen: 'allWorkouts', allWorkoutsLimit: 10 }) }, 'View All Workouts →'));
+    }
+  }
 
   return frag;
 }
@@ -942,6 +960,103 @@ function renderReview() {
     const history = await getAllWorkouts();
     setState({ history, screen: 'home', workoutType: null, exerciseList: [], results: [], notes: '', workoutDate: null, showDatePicker: false });
   }}, '✓ SAVE WORKOUT'));
+
+  return frag;
+}
+
+// ─── WORKOUT DETAIL (read-only summary) ───
+function renderWorkoutDetail() {
+  const w = state.viewingWorkout;
+  const frag = h('div', { className: 'fade-in' });
+  const backScreen = state.viewingWorkoutFrom || 'home';
+
+  frag.appendChild(h('button', { className: 'back-btn', onClick: () => setState({ screen: backScreen }) }, '← back'));
+  frag.appendChild(h('h1', null, w.workoutType));
+  const d = new Date(w.date);
+  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 16px' } },
+    d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })));
+
+  if (w.notes) {
+    const noteBox = h('div', { style: { background: '#CDFF5010', border: '1px solid #CDFF5025', borderRadius: '8px', padding: '10px 12px', marginBottom: '16px' } });
+    noteBox.appendChild(h('div', { style: { fontSize: '9px', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '3px' } }, 'session note'));
+    noteBox.appendChild(h('div', { style: { fontSize: '12px', color: 'var(--text)' } }, w.notes));
+    frag.appendChild(noteBox);
+  }
+
+  const wDate = new Date(w.date);
+  const list = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
+  w.exercises.forEach(ex => {
+    // Find previous session data for this exercise from workouts strictly before this one
+    const prevEx = state.history
+      .filter(hw => new Date(hw.date) < wDate)
+      .flatMap(hw => hw.exercises.filter(e => e.name === ex.name))
+      .pop();
+    const prevSets = prevEx?.sets || [];
+
+    const card = h('div', { className: 'card', style: { padding: '12px' } });
+    const header = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' } });
+    header.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 700, color: 'var(--text)' } }, ex.name));
+    header.appendChild(h('span', { className: `pill ${pillClass(ex.type)}` }, pillLabel(ex.type)));
+    if (ex.weight) header.appendChild(h('span', { style: { fontSize: '10px', color: 'var(--text-muted)' } }, `@ ${ex.weight} ${ex.weightUnit}`));
+    card.appendChild(header);
+
+    const setsRow = h('div', { style: { display: 'flex', gap: '5px' } });
+    ex.sets.forEach((s, sIdx) => {
+      const setBox = h('div', { style: {
+        flex: 1, background: s === 'skip' ? '#FFD66610' : 'var(--bg)',
+        border: `1px solid ${s === 'skip' ? '#FFD66622' : 'var(--border)'}`,
+        borderRadius: '6px', padding: '8px 4px', textAlign: 'center',
+      }});
+      setBox.appendChild(h('div', { style: { fontSize: '14px', fontWeight: 700, color: s === 'skip' ? 'var(--warn)' : 'var(--text)' } }, fmtVal(s, ex.type)));
+      setBox.appendChild(h('div', { style: { fontSize: '8px', color: 'var(--text-dim)', marginTop: '1px' } }, `Set ${sIdx + 1}`));
+      const lastVal = prevSets[sIdx];
+      if (typeof s === 'number' && typeof lastVal === 'number') {
+        const delta = s - lastVal;
+        const deltaColor = delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-subtle)';
+        const deltaText = delta > 0 ? `+${delta}` : delta === 0 ? '=' : String(delta);
+        setBox.appendChild(h('div', { style: { fontSize: '8px', color: deltaColor, marginTop: '1px', fontWeight: 700 } }, deltaText));
+      }
+      setsRow.appendChild(setBox);
+    });
+    card.appendChild(setsRow);
+    list.appendChild(card);
+  });
+  frag.appendChild(list);
+
+  return frag;
+}
+
+// ─── ALL WORKOUTS ───
+function renderAllWorkouts() {
+  const frag = h('div', { className: 'fade-in' });
+  frag.appendChild(h('button', { className: 'back-btn', onClick: () => setState({ screen: 'home' }) }, '← back'));
+  frag.appendChild(h('h1', null, 'All Workouts'));
+  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 16px' } },
+    `${state.history.length} workout${state.history.length !== 1 ? 's' : ''} logged`));
+
+  const sorted = [...state.history].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const limit = state.allWorkoutsLimit || 10;
+  const visible = sorted.slice(0, limit);
+
+  const list = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px' } });
+  visible.forEach(w => {
+    const card = h('button', { className: 'card card-btn', style: { padding: '12px' },
+      onClick: () => setState({ screen: 'workoutDetail', viewingWorkout: w, viewingWorkoutFrom: 'allWorkouts' }) });
+    const top = h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } });
+    top.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 700, color: 'var(--text)' } }, w.workoutType));
+    top.appendChild(h('span', { style: { color: 'var(--text-dim)', fontSize: '16px' } }, '→'));
+    card.appendChild(top);
+    const d = new Date(w.date);
+    card.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px' } },
+      `${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${w.exercises.length} exercises`));
+    if (w.notes) card.appendChild(h('div', { style: { fontSize: '10px', color: 'var(--text-dim)', marginTop: '4px', fontStyle: 'italic' } }, `"${w.notes}"`));
+    list.appendChild(card);
+  });
+  frag.appendChild(list);
+
+  if (limit < sorted.length) {
+    frag.appendChild(h('button', { className: 'btn btn-secondary', onClick: () => setState({ allWorkoutsLimit: limit + 10 }) }, 'Load More'));
+  }
 
   return frag;
 }
