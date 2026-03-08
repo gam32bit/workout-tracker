@@ -407,6 +407,8 @@ let state = {
   weightConfirmed: false,
   inputVal: '',
   notes: '',
+  workoutDate: null,
+  showDatePicker: false,
   progressFilter: null,
   progressSelected: null,
 };
@@ -785,7 +787,7 @@ function advanceExercise(results) {
   if (state.exIdx + 1 < state.exerciseList.length) {
     setState({ results, exIdx: state.exIdx + 1, setIdx: 0, weight: '', weightUnit: 'lbs', weightConfirmed: false, inputVal: '' });
   } else {
-    setState({ results, screen: 'review', notes: '' });
+    setState({ results, screen: 'review', notes: '', workoutDate: null, showDatePicker: false });
   }
 }
 
@@ -835,7 +837,32 @@ function renderReview() {
   const frag = h('div', { className: 'fade-in' });
   frag.appendChild(h('button', { className: 'back-btn', onClick: () => setState({ screen: 'logging' }) }, '← back'));
   frag.appendChild(h('h1', null, 'Review'));
-  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 20px' } }, `${state.workoutType} — confirm your entries`));
+  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 14px' } }, `${state.workoutType} — confirm your entries`));
+
+  // Date row
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const selectedDate = state.workoutDate || todayStr;
+  const isToday = selectedDate === todayStr;
+  const dateRow = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' } });
+  if (!state.showDatePicker) {
+    const label = isToday ? 'Today' : new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    dateRow.appendChild(h('span', { style: { fontSize: '12px', color: isToday ? 'var(--text-muted)' : 'var(--accent)', fontWeight: isToday ? 400 : 700 } }, label));
+    dateRow.appendChild(h('button', {
+      style: { background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '11px', fontFamily: 'var(--font)', cursor: 'pointer', padding: '0', textDecoration: 'underline' },
+      onClick: () => setState({ showDatePicker: true })
+    }, 'change date'));
+  } else {
+    const dateInput = h('input', { type: 'date', style: { fontFamily: 'var(--font)', fontSize: '12px', background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px' } });
+    dateInput.value = selectedDate;
+    dateInput.max = todayStr;
+    dateInput.addEventListener('change', (e) => { setState({ workoutDate: e.target.value, showDatePicker: false }); });
+    dateRow.appendChild(dateInput);
+    dateRow.appendChild(h('button', {
+      style: { background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '11px', fontFamily: 'var(--font)', cursor: 'pointer', padding: '0' },
+      onClick: () => setState({ showDatePicker: false })
+    }, 'cancel'));
+  }
+  frag.appendChild(dateRow);
 
   const list = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' } });
   state.results.forEach((ex, eIdx) => {
@@ -900,15 +927,20 @@ function renderReview() {
   frag.appendChild(h('div', { style: { height: '16px' } }));
 
   frag.appendChild(h('button', { className: 'btn btn-primary', onClick: async () => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const pickedDate = state.workoutDate;
+    const date = (pickedDate && pickedDate !== todayIso)
+      ? new Date(pickedDate + 'T12:00:00').toISOString()
+      : new Date().toISOString();
     const workout = {
-      date: new Date().toISOString(),
+      date,
       workoutType: state.workoutType,
       notes: state.notes || '',
       exercises: state.results,
     };
     await addWorkout(workout);
     const history = await getAllWorkouts();
-    setState({ history, screen: 'home', workoutType: null, exerciseList: [], results: [], notes: '' });
+    setState({ history, screen: 'home', workoutType: null, exerciseList: [], results: [], notes: '', workoutDate: null, showDatePicker: false });
   }}, '✓ SAVE WORKOUT'));
 
   return frag;
