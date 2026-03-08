@@ -407,6 +407,7 @@ let state = {
   weightConfirmed: false,
   inputVal: '',
   notes: '',
+  workoutDate: '',
   progressFilter: null,
   progressSelected: null,
 };
@@ -785,7 +786,7 @@ function advanceExercise(results) {
   if (state.exIdx + 1 < state.exerciseList.length) {
     setState({ results, exIdx: state.exIdx + 1, setIdx: 0, weight: '', weightUnit: 'lbs', weightConfirmed: false, inputVal: '' });
   } else {
-    setState({ results, screen: 'review', notes: '' });
+    setState({ results, screen: 'review', notes: '', workoutDate: new Date().toISOString().split('T')[0] });
   }
 }
 
@@ -835,7 +836,25 @@ function renderReview() {
   const frag = h('div', { className: 'fade-in' });
   frag.appendChild(h('button', { className: 'back-btn', onClick: () => setState({ screen: 'logging' }) }, '← back'));
   frag.appendChild(h('h1', null, 'Review'));
-  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 20px' } }, `${state.workoutType} — confirm your entries`));
+  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 12px' } }, `${state.workoutType} — confirm your entries`));
+
+  // Date row — defaults to today, tappable to change
+  const dateInput = h('input', { type: 'date', style: { position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 } });
+  dateInput.value = state.workoutDate;
+  dateInput.max = new Date().toISOString().split('T')[0];
+  dateInput.addEventListener('change', (e) => { if (e.target.value) setState({ workoutDate: e.target.value }); });
+
+  const today = new Date().toISOString().split('T')[0];
+  const isToday = state.workoutDate === today;
+  const displayDate = isToday ? 'Today' : new Date(state.workoutDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const dateRow = h('div', {
+    style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '20px', cursor: 'pointer', width: 'fit-content' },
+    onClick: () => dateInput.showPicker ? dateInput.showPicker() : dateInput.click()
+  });
+  dateRow.appendChild(dateInput);
+  dateRow.appendChild(h('span', { style: { fontSize: '11px', color: isToday ? 'var(--text-dim)' : 'var(--accent)', fontWeight: isToday ? 400 : 600 } }, displayDate));
+  dateRow.appendChild(h('span', { style: { fontSize: '10px', color: 'var(--text-subtle)' } }, '· change date'));
+  frag.appendChild(dateRow);
 
   const list = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' } });
   state.results.forEach((ex, eIdx) => {
@@ -901,7 +920,7 @@ function renderReview() {
 
   frag.appendChild(h('button', { className: 'btn btn-primary', onClick: async () => {
     const workout = {
-      date: new Date().toISOString(),
+      date: new Date(state.workoutDate + 'T12:00:00').toISOString(),
       workoutType: state.workoutType,
       notes: state.notes || '',
       exercises: state.results,
