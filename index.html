@@ -133,6 +133,15 @@ canvas { width: 100% !important; height: 170px !important; }
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0,0,0,0); border: 0;
 }
+
+.backup-banner {
+  background: var(--warn-bg); border: 1px solid #FFD66633;
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.backup-banner-text { font-size: 11px; color: var(--warn); line-height: 1.5; }
+.backup-banner-actions { display: flex; gap: 8px; }
+.backup-data-row { display: flex; gap: 8px; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -201,6 +210,58 @@ async function clearAllWorkouts() {
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
+}
+
+async function exportWorkouts() {
+  const workouts = await getAllWorkouts();
+  const payload = { version: 1, exportedAt: new Date().toISOString(), workouts };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const date = new Date().toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  a.href = url; a.download = `workout-backup-${date}.json`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  localStorage.setItem('lastBackupDate', new Date().toISOString());
+  setState({ showBackupReminder: false });
+}
+
+function importWorkouts() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.workouts || !Array.isArray(data.workouts)) {
+        alert('Invalid backup file.');
+        return;
+      }
+      const ok = confirm(`Import ${data.workouts.length} workout(s)? They will be added to your existing data.`);
+      if (!ok) return;
+      for (const w of data.workouts) {
+        const { id: _id, ...workout } = w;
+        await addWorkout(workout);
+      }
+      const history = await getAllWorkouts();
+      setState({ history });
+    } catch {
+      alert('Could not read backup file.');
+    }
+  };
+  input.click();
+}
+
+function checkBackupReminder() {
+  const lastBackup = localStorage.getItem('lastBackupDate');
+  const dismissed = localStorage.getItem('backupReminderDismissed');
+  const today = new Date().toISOString().slice(0, 10);
+  if (dismissed === today) return false;
+  if (!lastBackup) return true;
+  const daysSince = (Date.now() - new Date(lastBackup)) / (1000 * 60 * 60 * 24);
+  return daysSince >= 7;
 }
 
 // ═══════════════════════════════════════
@@ -412,6 +473,7 @@ function drawChart(canvas, data, key, color, labels) {
 // ═══════════════════════════════════════
 let state = {
   screen: 'loading',
+  showBackupReminder: false,
   history: [],
   workoutType: null,
   exerciseList: [],
@@ -473,6 +535,24 @@ function renderHome() {
     )
   ));
 
+  // Backup reminder banner
+  if (state.showBackupReminder) {
+    const lastBackup = localStorage.getItem('lastBackupDate');
+    const daysSince = lastBackup ? Math.floor((Date.now() - new Date(lastBackup)) / (1000 * 60 * 60 * 24)) : null;
+    const msg = daysSince === null
+      ? "Your workouts have never been backed up. Export a backup file to keep your data safe."
+      : `It's been ${daysSince} day${daysSince !== 1 ? 's' : ''} since your last backup.`;
+    const banner = h('div', { className: 'backup-banner' });
+    banner.appendChild(h('div', { className: 'backup-banner-text' }, msg));
+    const actions = h('div', { className: 'backup-banner-actions' });
+    actions.appendChild(h('button', { className: 'btn btn-secondary', style: { flex: 1, fontSize: '11px', padding: '8px' }, onClick: exportWorkouts }, 'Export Now'));
+    actions.appendChild(h('button', { className: 'btn btn-ghost', style: { fontSize: '11px', padding: '8px' },
+      onClick: () => { localStorage.setItem('backupReminderDismissed', new Date().toISOString().slice(0, 10)); setState({ showBackupReminder: false }); }
+    }, 'Dismiss'));
+    banner.appendChild(actions);
+    frag.appendChild(banner);
+  }
+
   // Action buttons at top
   const btns = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' } });
   btns.appendChild(h('button', { className: 'btn btn-primary', onClick: () => setState({ screen: 'selectType' }) }, '▶ LOG WORKOUT'));
@@ -509,6 +589,12 @@ function renderHome() {
         onClick: () => setState({ screen: 'allWorkouts', allWorkoutsLimit: 10 }) }, 'View All Workouts →'));
     }
   }
+
+  // Export / Import row
+  const dataRow = h('div', { className: 'backup-data-row' });
+  dataRow.appendChild(h('button', { className: 'btn btn-ghost', style: { flex: 1, fontSize: '11px' }, onClick: exportWorkouts }, '↓ Export Backup'));
+  dataRow.appendChild(h('button', { className: 'btn btn-ghost', style: { flex: 1, fontSize: '11px' }, onClick: importWorkouts }, '↑ Import Backup'));
+  frag.appendChild(dataRow);
 
   return frag;
 }
@@ -1196,7 +1282,7 @@ async function init() {
     for (const s of SEED) await addWorkout(s);
     history = await getAllWorkouts();
   }
-  setState({ history, screen: 'home' });
+  setState({ history, screen: 'home', showBackupReminder: checkBackupReminder() });
 }
 
 init();
