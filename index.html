@@ -274,7 +274,7 @@ const SEED = [
       { name: 'Bench Press', type: 'weighted', weight: 45, weightUnit: 'kg', sets: [8,8,8] },
       { name: 'Dips', type: 'reps', weight: null, weightUnit: null, sets: [8,8,8] },
       { name: 'Overhead Press', type: 'weighted', weight: 23, weightUnit: 'kg', sets: [8,8,8] },
-      { name: 'Split Squats', type: 'weighted', weight: 50, weightUnit: 'lbs', sets: [32,20,20] },
+      { name: 'Split Squats', type: 'weighted', bilateral: true, weight: 50, weightUnit: 'lbs', sets: [32,20,20] },
       { name: 'Leg Extension', type: 'weighted', weight: 50, weightUnit: 'kg', sets: [10,8,8] },
       { name: 'Calf Raise', type: 'weighted', weight: 60, weightUnit: 'lbs', sets: [8,8,8] },
     ],
@@ -283,7 +283,7 @@ const SEED = [
     date: '2026-02-26T12:00:00.000Z', workoutType: 'Full Body', notes: '',
     exercises: [
       { name: 'Pull Ups', type: 'reps', weight: null, weightUnit: null, sets: [11,11,8] },
-      { name: 'Lunges', type: 'weighted', weight: 90, weightUnit: 'lbs', sets: [8,8,8] },
+      { name: 'Lunges', type: 'weighted', bilateral: true, weight: 90, weightUnit: 'lbs', sets: [8,8,8] },
       { name: 'Push Ups', type: 'reps', weight: null, weightUnit: null, sets: [22,22,18] },
       { name: 'Deadlifts', type: 'weighted', weight: 90, weightUnit: 'lbs', sets: [8,8,8] },
       { name: 'Dip Bar Leg Raises', type: 'reps', weight: null, weightUnit: null, sets: [15,12,10] },
@@ -297,7 +297,7 @@ const SEED = [
       { name: 'Curls', type: 'weighted', weight: 60, weightUnit: 'lbs', sets: [8,8,8] },
       { name: 'Ab Twists', type: 'weighted', weight: 40, weightUnit: 'lbs', sets: [16,16,16] },
       { name: 'Planks', type: 'timed', weight: null, weightUnit: null, sets: [75,75] },
-      { name: 'Romanian Single Leg Deadlifts', type: 'weighted', weight: 30, weightUnit: 'lbs', sets: [16,16,16] },
+      { name: 'Romanian Single Leg Deadlifts', type: 'weighted', bilateral: true, weight: 30, weightUnit: 'lbs', sets: [16,16,16] },
     ],
   },
   {
@@ -306,7 +306,7 @@ const SEED = [
       { name: 'Bench Press', type: 'weighted', weight: 47.5, weightUnit: 'kg', sets: [8,8,7] },
       { name: 'Dips', type: 'reps', weight: null, weightUnit: null, sets: [10,9,8] },
       { name: 'Overhead Press', type: 'weighted', weight: 25, weightUnit: 'kg', sets: [8,7,7] },
-      { name: 'Split Squats', type: 'weighted', weight: 55, weightUnit: 'lbs', sets: [30,22,20] },
+      { name: 'Split Squats', type: 'weighted', bilateral: true, weight: 55, weightUnit: 'lbs', sets: [30,22,20] },
       { name: 'Leg Extension', type: 'weighted', weight: 52, weightUnit: 'kg', sets: [10,9,8] },
       { name: 'Calf Raise', type: 'weighted', weight: 65, weightUnit: 'lbs', sets: [8,8,8] },
     ],
@@ -319,14 +319,14 @@ const SEED = [
       { name: 'Curls', type: 'weighted', weight: 60, weightUnit: 'lbs', sets: [10,9,8] },
       { name: 'Ab Twists', type: 'weighted', weight: 45, weightUnit: 'lbs', sets: [16,16,16] },
       { name: 'Planks', type: 'timed', weight: null, weightUnit: null, sets: [80,80] },
-      { name: 'Romanian Single Leg Deadlifts', type: 'weighted', weight: 35, weightUnit: 'lbs', sets: [16,16,14] },
+      { name: 'Romanian Single Leg Deadlifts', type: 'weighted', bilateral: true, weight: 35, weightUnit: 'lbs', sets: [16,16,14] },
     ],
   },
   {
     date: '2026-03-09T12:00:00.000Z', workoutType: 'Full Body', notes: '',
     exercises: [
       { name: 'Pull Ups', type: 'reps', weight: null, weightUnit: null, sets: [12,12,10] },
-      { name: 'Lunges', type: 'weighted', weight: 95, weightUnit: 'lbs', sets: [8,8,8] },
+      { name: 'Lunges', type: 'weighted', bilateral: true, weight: 95, weightUnit: 'lbs', sets: [8,8,8] },
       { name: 'Push Ups', type: 'reps', weight: null, weightUnit: null, sets: [25,23,20] },
       { name: 'Deadlifts', type: 'weighted', weight: 95, weightUnit: 'lbs', sets: [8,8,8] },
       { name: 'Dip Bar Leg Raises', type: 'reps', weight: null, weightUnit: null, sets: [16,14,12] },
@@ -338,7 +338,7 @@ const SEED = [
       { name: 'Bench Press', type: 'weighted', weight: 47.5, weightUnit: 'kg', sets: [8,8,8] },
       { name: 'Dips', type: 'reps', weight: null, weightUnit: null, sets: [10,10,9] },
       { name: 'Overhead Press', type: 'weighted', weight: 25, weightUnit: 'kg', sets: [8,8,7] },
-      { name: 'Split Squats', type: 'weighted', weight: 55, weightUnit: 'lbs', sets: [32,24,22] },
+      { name: 'Split Squats', type: 'weighted', bilateral: true, weight: 55, weightUnit: 'lbs', sets: [32,24,22] },
       { name: 'Leg Extension', type: 'weighted', weight: 52, weightUnit: 'kg', sets: [10,10,9] },
       { name: 'Calf Raise', type: 'weighted', weight: 65, weightUnit: 'lbs', sets: [10,8,8] },
     ],
@@ -351,14 +351,14 @@ const SEED = [
       { name: 'Curls', type: 'weighted', weight: 65, weightUnit: 'lbs', sets: [8,8,8] },
       { name: 'Ab Twists', type: 'weighted', weight: 45, weightUnit: 'lbs', sets: [18,16,16] },
       { name: 'Planks', type: 'timed', weight: null, weightUnit: null, sets: [85,82] },
-      { name: 'Romanian Single Leg Deadlifts', type: 'weighted', weight: 35, weightUnit: 'lbs', sets: [16,16,16] },
+      { name: 'Romanian Single Leg Deadlifts', type: 'weighted', bilateral: true, weight: 35, weightUnit: 'lbs', sets: [16,16,16] },
     ],
   },
   {
     date: '2026-03-20T12:00:00.000Z', workoutType: 'Full Body', notes: '',
     exercises: [
       { name: 'Pull Ups', type: 'reps', weight: null, weightUnit: null, sets: [13,12,10] },
-      { name: 'Lunges', type: 'weighted', weight: 95, weightUnit: 'lbs', sets: [10,8,8] },
+      { name: 'Lunges', type: 'weighted', bilateral: true, weight: 95, weightUnit: 'lbs', sets: [10,8,8] },
       { name: 'Push Ups', type: 'reps', weight: null, weightUnit: null, sets: [25,25,22] },
       { name: 'Deadlifts', type: 'weighted', weight: 100, weightUnit: 'lbs', sets: [8,8,7] },
       { name: 'Dip Bar Leg Raises', type: 'reps', weight: null, weightUnit: null, sets: [18,15,12] },
@@ -368,18 +368,18 @@ const SEED = [
 
 const TEMPLATES = {
   'Full Body': [
-    { name: 'Pull Ups', type: 'reps' }, { name: 'Lunges', type: 'weighted' },
+    { name: 'Pull Ups', type: 'reps' }, { name: 'Lunges', type: 'weighted', bilateral: true },
     { name: 'Push Ups', type: 'reps' }, { name: 'Deadlifts', type: 'weighted' },
     { name: 'Dip Bar Leg Raises', type: 'reps' },
   ],
   'Pull + Core': [
     { name: 'Pull Downs', type: 'weighted' }, { name: 'Rows', type: 'weighted' },
     { name: 'Curls', type: 'weighted' }, { name: 'Ab Twists', type: 'weighted' },
-    { name: 'Planks', type: 'timed' }, { name: 'Romanian Single Leg Deadlifts', type: 'weighted' },
+    { name: 'Planks', type: 'timed' }, { name: 'Romanian Single Leg Deadlifts', type: 'weighted', bilateral: true },
   ],
   'Push + Legs': [
     { name: 'Bench Press', type: 'weighted' }, { name: 'Dips', type: 'reps' },
-    { name: 'Overhead Press', type: 'weighted' }, { name: 'Split Squats', type: 'weighted' },
+    { name: 'Overhead Press', type: 'weighted' }, { name: 'Split Squats', type: 'weighted', bilateral: true },
     { name: 'Leg Extension', type: 'weighted' }, { name: 'Calf Raise', type: 'weighted' },
   ],
 };
@@ -454,12 +454,6 @@ function calcVolume(ex) {
   if (ex.type !== 'weighted' || !ex.weight) return 0;
   const reps = ex.sets.filter(s => typeof s === 'number').reduce((a, b) => a + b, 0);
   return ex.weight * reps;
-}
-
-function calcBestSetVolume(ex) {
-  if (ex.type !== 'weighted' || !ex.weight) return 0;
-  const reps = ex.sets.filter(s => typeof s === 'number');
-  return reps.length > 0 ? ex.weight * Math.max(...reps) : 0;
 }
 
 function getWorkoutTypeColor(type) {
@@ -583,6 +577,7 @@ let state = {
   viewingWorkout: null,
   viewingWorkoutFrom: 'home',
   allWorkoutsLimit: 10,
+  showExerciseManager: false,
 };
 
 function setState(partial) {
@@ -711,7 +706,7 @@ function renderSelectType() {
   for (const type of types) {
     const last = getLastForType(state.history, type);
     const card = h('button', { className: 'card card-btn', onClick: () => {
-      const exList = last ? last.exercises.map(e => ({ name: e.name, type: e.type })) : TEMPLATES[type];
+      const exList = last ? last.exercises.map(e => ({ name: e.name, type: e.type, bilateral: e.bilateral || false })) : TEMPLATES[type];
       setState({ screen: 'editList', workoutType: type, exerciseList: JSON.parse(JSON.stringify(exList)) });
     }});
     card.appendChild(h('div', { style: { fontSize: '16px', fontWeight: 800, letterSpacing: '-0.3px', color: 'var(--text)' } }, type));
@@ -770,7 +765,9 @@ function renderEditList() {
     if (!name?.trim()) return;
     const typeChoice = prompt('Type: weighted, reps, or timed', 'weighted');
     const type = ['weighted', 'reps', 'timed'].includes(typeChoice) ? typeChoice : 'weighted';
-    setState({ exerciseList: [...state.exerciseList, { name: name.trim(), type }] });
+    const bilateralChoice = prompt('Is this a single-side exercise? (y/n)', 'n');
+    const bilateral = bilateralChoice && bilateralChoice.toLowerCase().startsWith('y');
+    setState({ exerciseList: [...state.exerciseList, { name: name.trim(), type, bilateral }] });
   }}, '+ Add Exercise');
   frag.appendChild(addBtn);
 
@@ -778,7 +775,8 @@ function renderEditList() {
   const startBtn = h('button', { className: 'btn btn-primary', onClick: () => {
     setState({
       screen: 'logging', exIdx: 0, setIdx: 0, weight: '', weightUnit: 'lbs', weightConfirmed: false, inputVal: '',
-      results: state.exerciseList.map(ex => ({ name: ex.name, type: ex.type, weight: null, weightUnit: null, sets: [] }))
+      showExerciseManager: false,
+      results: state.exerciseList.map(ex => ({ name: ex.name, type: ex.type, bilateral: ex.bilateral || false, weight: null, weightUnit: null, sets: [] }))
     });
   }}, `START (${state.exerciseList.length} exercises) →`);
   if (state.exerciseList.length === 0) startBtn.disabled = true;
@@ -811,7 +809,11 @@ function renderLogging() {
 
   // Top row: back + undo
   const topRow = h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' } });
-  topRow.appendChild(h('button', { className: 'back-btn', style: { margin: 0 }, onClick: () => setState({ screen: 'editList' }) }, '← back'));
+  topRow.appendChild(h('button', { className: 'back-btn', style: { margin: 0 }, onClick: () => {
+    const hasLoggedSets = results.some(r => r.sets.length > 0);
+    if (hasLoggedSets && !confirm('You have sets logged. Discard this workout?')) return;
+    setState({ screen: 'editList' });
+  } }, '← back'));
   const canUndo = result.sets.length > 0 || (weightConfirmed && result.sets.length === 0) || exIdx > 0;
   if (canUndo) {
     topRow.appendChild(h('button', {
@@ -902,11 +904,42 @@ function renderLogging() {
       inputMode: isTimed ? 'text' : 'numeric',
       placeholder: isTimed ? 'e.g. 1m15s or 75' : 'Reps',
       value: prefill,
-      style: { marginBottom: '10px' } });
+      style: { marginBottom: isWeighted ? '2px' : '10px' } });
     inp.addEventListener('input', (e) => { state.inputVal = e.target.value; });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && state.inputVal) logSetAction(); });
     inp.addEventListener('focus', () => inp.select());
     frag.appendChild(inp);
+
+    // Volume preview for weighted exercises
+    if (isWeighted && result.weight) {
+      const previewEl = h('div', { style: { fontSize: '11px', color: 'var(--text-subtle)', marginBottom: '10px', minHeight: '16px' } });
+      function updatePreview() {
+        const reps = parseInt(state.inputVal);
+        if (isNaN(reps) || reps <= 0) { previewEl.textContent = ''; return; }
+        const curVol = result.weight * reps;
+        const lastVal = lastSets[setIdx];
+        if (typeof lastVal === 'number' && lastData?.weight) {
+          const lastVol = lastData.weight * lastVal;
+          const delta = curVol - lastVol;
+          previewEl.textContent = '';
+          previewEl.appendChild(document.createTextNode(`\u2192 ${curVol} vol `));
+          const deltaSpan = h('span', { style: { color: delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-subtle)' } },
+            delta > 0 ? `(+${delta})` : delta === 0 ? '(= last)' : `(\u2212${Math.abs(delta)})`);
+          previewEl.appendChild(deltaSpan);
+        } else {
+          previewEl.textContent = `\u2192 ${curVol} vol`;
+        }
+      }
+      inp.addEventListener('input', updatePreview);
+      updatePreview();
+      frag.appendChild(previewEl);
+    }
+
+    // Bilateral reminder
+    if (ex.bilateral) {
+      frag.appendChild(h('div', { style: { fontSize: '10px', color: 'var(--text-dim)', fontStyle: 'italic', marginTop: '4px', marginBottom: '8px' } },
+        'total both sides (e.g. 16 = 8L + 8R)'));
+    }
 
     const btns = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
     btns.appendChild(h('button', { className: 'btn btn-primary', onClick: logSetAction }, `LOG SET ${setIdx + 1} →`));
@@ -953,6 +986,79 @@ function renderLogging() {
     }
 
     frag.appendChild(nextCard);
+  }
+
+  // Exercise manager toggle
+  const managerBtn = h('button', { className: 'btn btn-ghost', style: { marginTop: '16px', fontSize: '11px' },
+    onClick: () => setState({ showExerciseManager: !state.showExerciseManager }) },
+    state.showExerciseManager ? '✎ Hide exercise list' : '✎ Edit exercise list');
+  frag.appendChild(managerBtn);
+
+  // Exercise manager section
+  if (state.showExerciseManager) {
+    const mgr = h('div', { style: { marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' } });
+    exerciseList.forEach((mex, i) => {
+      const isDone = i < exIdx;
+      const isCurrent = i === exIdx;
+      const isUpcoming = i > exIdx;
+      const row = h('div', { style: {
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: isCurrent ? '#CDFF5010' : 'var(--surface)',
+        border: `1px solid ${isCurrent ? '#CDFF5033' : 'var(--border)'}`,
+        borderRadius: '8px', padding: '10px 12px',
+        opacity: isDone ? '0.5' : '1',
+      }});
+      const left = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 } });
+      left.appendChild(h('span', { style: { fontSize: '11px', color: 'var(--text-subtle)', width: '16px', flexShrink: 0 } }, String(i + 1)));
+      left.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isCurrent ? 'var(--accent)' : 'var(--text)' } }, mex.name));
+      left.appendChild(h('span', { className: `pill ${pillClass(mex.type)}` }, pillLabel(mex.type)));
+      if (isCurrent) left.appendChild(h('span', { style: { fontSize: '9px', color: 'var(--accent)', fontWeight: 700 } }, 'NOW'));
+      row.appendChild(left);
+
+      if (isUpcoming) {
+        const controls = h('div', { style: { display: 'flex', gap: '2px', flexShrink: 0 } });
+        controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: i === exIdx + 1 ? 'var(--text-subtle)' : 'var(--text-muted)', fontSize: '11px', padding: '2px 4px', fontFamily: 'var(--font)' },
+          onClick: () => {
+            if (i <= exIdx + 1) return;
+            const l = [...state.exerciseList]; const r = JSON.parse(JSON.stringify(state.results));
+            [l[i-1], l[i]] = [l[i], l[i-1]]; [r[i-1], r[i]] = [r[i], r[i-1]];
+            setState({ exerciseList: l, results: r });
+          } }, '↑'));
+        controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: i === exerciseList.length - 1 ? 'var(--text-subtle)' : 'var(--text-muted)', fontSize: '11px', padding: '2px 4px', fontFamily: 'var(--font)' },
+          onClick: () => {
+            if (i >= exerciseList.length - 1) return;
+            const l = [...state.exerciseList]; const r = JSON.parse(JSON.stringify(state.results));
+            [l[i], l[i+1]] = [l[i+1], l[i]]; [r[i], r[i+1]] = [r[i+1], r[i]];
+            setState({ exerciseList: l, results: r });
+          } }, '↓'));
+        controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '14px', padding: '2px 6px', fontFamily: 'var(--font)' },
+          onClick: () => {
+            const l = state.exerciseList.filter((_, j) => j !== i);
+            const r = state.results.filter((_, j) => j !== i);
+            setState({ exerciseList: l, results: r });
+          } }, '×'));
+        row.appendChild(controls);
+      }
+      mgr.appendChild(row);
+    });
+
+    // Add exercise button
+    mgr.appendChild(h('button', { className: 'btn btn-secondary', style: { marginTop: '4px', fontSize: '11px' }, onClick: () => {
+      const name = prompt('Exercise name:');
+      if (!name?.trim()) return;
+      const typeChoice = prompt('Type: weighted, reps, or timed', 'weighted');
+      const type = ['weighted', 'reps', 'timed'].includes(typeChoice) ? typeChoice : 'weighted';
+      const bilateralChoice = prompt('Is this a single-side exercise? (y/n)', 'n');
+      const bilateral = bilateralChoice && bilateralChoice.toLowerCase().startsWith('y');
+      const newEx = { name: name.trim(), type, bilateral };
+      const newResult = { name: name.trim(), type, bilateral, weight: null, weightUnit: null, sets: [] };
+      setState({
+        exerciseList: [...state.exerciseList, newEx],
+        results: [...state.results, newResult],
+      });
+    }}, '+ Add Exercise'));
+
+    frag.appendChild(mgr);
   }
 
   return frag;
@@ -1414,66 +1520,6 @@ function renderProgress() {
 
   // ── SECTION 2: STRENGTH HIGHLIGHTS ──
   frag.appendChild(h('div', { className: 'label', style: { marginBottom: '8px' } }, 'Strength Highlights'));
-
-  // New Bests
-  const newBests = [];
-  const exNamesThisMonth = new Set();
-  monthWorkouts.forEach(w => w.exercises.forEach(ex => exNamesThisMonth.add(ex.name)));
-
-  const priorWorkouts = state.history.filter(w => {
-    const d = new Date(w.date);
-    return d.getFullYear() < year || (d.getFullYear() === year && d.getMonth() < month);
-  });
-
-  exNamesThisMonth.forEach(name => {
-    // Get all instances this month
-    const monthExInstances = [];
-    monthWorkouts.forEach(w => w.exercises.filter(e => e.name === name).forEach(e => monthExInstances.push(e)));
-    if (monthExInstances.length === 0) return;
-
-    const type = monthExInstances[0].type;
-
-    // Get prior best
-    const priorInstances = [];
-    priorWorkouts.forEach(w => w.exercises.filter(e => e.name === name).forEach(e => priorInstances.push(e)));
-
-    let monthBest, priorBest;
-    if (type === 'weighted') {
-      monthBest = Math.max(...monthExInstances.map(e => calcBestSetVolume(e)));
-      priorBest = priorInstances.length > 0 ? Math.max(...priorInstances.map(e => calcBestSetVolume(e))) : 0;
-    } else if (type === 'timed') {
-      monthBest = Math.max(...monthExInstances.flatMap(e => e.sets.filter(s => typeof s === 'number')));
-      priorBest = priorInstances.length > 0 ? Math.max(...priorInstances.flatMap(e => e.sets.filter(s => typeof s === 'number')), 0) : 0;
-    } else {
-      monthBest = Math.max(...monthExInstances.flatMap(e => e.sets.filter(s => typeof s === 'number')));
-      priorBest = priorInstances.length > 0 ? Math.max(...priorInstances.flatMap(e => e.sets.filter(s => typeof s === 'number')), 0) : 0;
-    }
-
-    if (monthBest > priorBest && priorInstances.length > 0) {
-      let display;
-      if (type === 'weighted') display = `${Math.round(monthBest)} vol/set`;
-      else if (type === 'timed') display = formatTime(monthBest);
-      else display = `${monthBest} reps`;
-      newBests.push({ name, type, display });
-    }
-  });
-
-  if (newBests.length > 0) {
-    const bestsCard = h('div', { className: 'card', style: { padding: '12px', marginBottom: '10px' } });
-    bestsCard.appendChild(h('div', { style: { fontSize: '11px', fontWeight: 700, color: 'var(--text)', marginBottom: '8px' } }, 'New Bests'));
-    newBests.forEach(b => {
-      const row = h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' } });
-      const left = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } });
-      left.appendChild(h('span', { style: { fontSize: '12px', color: 'var(--text)' } }, b.name));
-      left.appendChild(h('span', { className: `pill ${pillClass(b.type)}` }, pillLabel(b.type)));
-      row.appendChild(left);
-      row.appendChild(h('span', { style: { fontSize: '12px', fontWeight: 700, color: 'var(--success)' } }, b.display));
-      bestsCard.appendChild(row);
-    });
-    frag.appendChild(bestsCard);
-  } else {
-    frag.appendChild(h('div', { style: { color: 'var(--text-subtle)', fontSize: '11px', marginBottom: '10px', fontStyle: 'italic' } }, 'No new bests this month'));
-  }
 
   // Volume Trends (weighted only)
   const weightedExNames = new Set();
