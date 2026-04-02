@@ -300,6 +300,70 @@ const SEED = [
       { name: 'Romanian Single Leg Deadlifts', type: 'weighted', weight: 30, weightUnit: 'lbs', sets: [16,16,16] },
     ],
   },
+  {
+    date: '2026-03-02T12:00:00.000Z', workoutType: 'Push + Legs', notes: '',
+    exercises: [
+      { name: 'Bench Press', type: 'weighted', weight: 47.5, weightUnit: 'kg', sets: [8,8,7] },
+      { name: 'Dips', type: 'reps', weight: null, weightUnit: null, sets: [10,9,8] },
+      { name: 'Overhead Press', type: 'weighted', weight: 25, weightUnit: 'kg', sets: [8,7,7] },
+      { name: 'Split Squats', type: 'weighted', weight: 55, weightUnit: 'lbs', sets: [30,22,20] },
+      { name: 'Leg Extension', type: 'weighted', weight: 52, weightUnit: 'kg', sets: [10,9,8] },
+      { name: 'Calf Raise', type: 'weighted', weight: 65, weightUnit: 'lbs', sets: [8,8,8] },
+    ],
+  },
+  {
+    date: '2026-03-05T12:00:00.000Z', workoutType: 'Pull + Core', notes: 'Felt strong today',
+    exercises: [
+      { name: 'Pull Downs', type: 'weighted', weight: 95, weightUnit: 'lbs', sets: [8,8,8] },
+      { name: 'Rows', type: 'weighted', weight: 75, weightUnit: 'lbs', sets: [12,12,10] },
+      { name: 'Curls', type: 'weighted', weight: 60, weightUnit: 'lbs', sets: [10,9,8] },
+      { name: 'Ab Twists', type: 'weighted', weight: 45, weightUnit: 'lbs', sets: [16,16,16] },
+      { name: 'Planks', type: 'timed', weight: null, weightUnit: null, sets: [80,80] },
+      { name: 'Romanian Single Leg Deadlifts', type: 'weighted', weight: 35, weightUnit: 'lbs', sets: [16,16,14] },
+    ],
+  },
+  {
+    date: '2026-03-09T12:00:00.000Z', workoutType: 'Full Body', notes: '',
+    exercises: [
+      { name: 'Pull Ups', type: 'reps', weight: null, weightUnit: null, sets: [12,12,10] },
+      { name: 'Lunges', type: 'weighted', weight: 95, weightUnit: 'lbs', sets: [8,8,8] },
+      { name: 'Push Ups', type: 'reps', weight: null, weightUnit: null, sets: [25,23,20] },
+      { name: 'Deadlifts', type: 'weighted', weight: 95, weightUnit: 'lbs', sets: [8,8,8] },
+      { name: 'Dip Bar Leg Raises', type: 'reps', weight: null, weightUnit: null, sets: [16,14,12] },
+    ],
+  },
+  {
+    date: '2026-03-12T12:00:00.000Z', workoutType: 'Push + Legs', notes: '',
+    exercises: [
+      { name: 'Bench Press', type: 'weighted', weight: 47.5, weightUnit: 'kg', sets: [8,8,8] },
+      { name: 'Dips', type: 'reps', weight: null, weightUnit: null, sets: [10,10,9] },
+      { name: 'Overhead Press', type: 'weighted', weight: 25, weightUnit: 'kg', sets: [8,8,7] },
+      { name: 'Split Squats', type: 'weighted', weight: 55, weightUnit: 'lbs', sets: [32,24,22] },
+      { name: 'Leg Extension', type: 'weighted', weight: 52, weightUnit: 'kg', sets: [10,10,9] },
+      { name: 'Calf Raise', type: 'weighted', weight: 65, weightUnit: 'lbs', sets: [10,8,8] },
+    ],
+  },
+  {
+    date: '2026-03-16T12:00:00.000Z', workoutType: 'Pull + Core', notes: '',
+    exercises: [
+      { name: 'Pull Downs', type: 'weighted', weight: 95, weightUnit: 'lbs', sets: [9,8,8] },
+      { name: 'Rows', type: 'weighted', weight: 75, weightUnit: 'lbs', sets: [12,12,12] },
+      { name: 'Curls', type: 'weighted', weight: 65, weightUnit: 'lbs', sets: [8,8,8] },
+      { name: 'Ab Twists', type: 'weighted', weight: 45, weightUnit: 'lbs', sets: [18,16,16] },
+      { name: 'Planks', type: 'timed', weight: null, weightUnit: null, sets: [85,82] },
+      { name: 'Romanian Single Leg Deadlifts', type: 'weighted', weight: 35, weightUnit: 'lbs', sets: [16,16,16] },
+    ],
+  },
+  {
+    date: '2026-03-20T12:00:00.000Z', workoutType: 'Full Body', notes: '',
+    exercises: [
+      { name: 'Pull Ups', type: 'reps', weight: null, weightUnit: null, sets: [13,12,10] },
+      { name: 'Lunges', type: 'weighted', weight: 95, weightUnit: 'lbs', sets: [10,8,8] },
+      { name: 'Push Ups', type: 'reps', weight: null, weightUnit: null, sets: [25,25,22] },
+      { name: 'Deadlifts', type: 'weighted', weight: 100, weightUnit: 'lbs', sets: [8,8,7] },
+      { name: 'Dip Bar Leg Raises', type: 'reps', weight: null, weightUnit: null, sets: [18,15,12] },
+    ],
+  },
 ];
 
 const TEMPLATES = {
@@ -378,6 +442,32 @@ function dateLbl(iso) { const d = new Date(iso); return `${d.getMonth()+1}/${d.g
 
 function pillClass(type) { return type === 'weighted' ? 'pill-weight' : type === 'timed' ? 'pill-timed' : 'pill-reps'; }
 function pillLabel(type) { return type === 'weighted' ? 'weight' : type === 'timed' ? 'timed' : 'reps'; }
+
+function getMonthWorkouts(history, year, month) {
+  return history.filter(w => {
+    const d = new Date(w.date);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+}
+
+function calcVolume(ex) {
+  if (ex.type !== 'weighted' || !ex.weight) return 0;
+  const reps = ex.sets.filter(s => typeof s === 'number').reduce((a, b) => a + b, 0);
+  return ex.weight * reps;
+}
+
+function calcBestSetVolume(ex) {
+  if (ex.type !== 'weighted' || !ex.weight) return 0;
+  const reps = ex.sets.filter(s => typeof s === 'number');
+  return reps.length > 0 ? ex.weight * Math.max(...reps) : 0;
+}
+
+function getWorkoutTypeColor(type) {
+  if (type === 'Push + Legs') return 'var(--warn)';
+  if (type === 'Pull + Core') return 'var(--success)';
+  if (type === 'Full Body') return 'var(--accent)';
+  return 'var(--text-dim)';
+}
 
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
@@ -487,6 +577,7 @@ let state = {
   notes: '',
   workoutDate: null,
   showDatePicker: false,
+  progressMonth: null,
   progressFilter: null,
   progressSelected: null,
   viewingWorkout: null,
@@ -556,7 +647,7 @@ function renderHome() {
   // Action buttons at top
   const btns = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' } });
   btns.appendChild(h('button', { className: 'btn btn-primary', onClick: () => setState({ screen: 'selectType' }) }, '▶ LOG WORKOUT'));
-  const progBtn = h('button', { className: 'btn btn-secondary', onClick: () => setState({ screen: 'progress', progressFilter: null, progressSelected: null }) }, '📊 VIEW PROGRESS');
+  const progBtn = h('button', { className: 'btn btn-secondary', onClick: () => setState({ screen: 'progress', progressMonth: null, progressFilter: null, progressSelected: null }) }, '📊 VIEW PROGRESS');
   if (state.history.length === 0) { progBtn.disabled = true; }
   btns.appendChild(progBtn);
   frag.appendChild(btns);
@@ -1166,8 +1257,289 @@ function renderProgress() {
 
   if (state.progressSelected) return renderProgressDetail(frag);
 
+  const now = new Date();
+  const pm = state.progressMonth || { year: now.getFullYear(), month: now.getMonth() };
+  const { year, month } = pm;
+
+  // Find earliest workout date
+  const earliest = state.history.length > 0
+    ? state.history.reduce((min, w) => { const d = new Date(w.date); return d < min ? d : min; }, new Date(state.history[0].date))
+    : now;
+  const canPrev = year > earliest.getFullYear() || (year === earliest.getFullYear() && month > earliest.getMonth());
+  const canNext = year < now.getFullYear() || (year === now.getFullYear() && month < now.getMonth());
+
   frag.appendChild(h('button', { className: 'back-btn', onClick: () => setState({ screen: 'home' }) }, '← back'));
-  frag.appendChild(h('h1', null, 'Progress'));
+
+  // Month navigation
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const navRow = h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' } });
+  navRow.appendChild(h('button', {
+    style: { background: 'none', border: 'none', color: canPrev ? 'var(--text)' : 'var(--text-subtle)', fontSize: '18px', padding: '4px 8px', fontFamily: 'var(--font)', cursor: canPrev ? 'pointer' : 'default' },
+    onClick: () => { if (canPrev) { const m = month === 0 ? 11 : month - 1; const y = month === 0 ? year - 1 : year; setState({ progressMonth: { year: y, month: m } }); } }
+  }, '←'));
+  navRow.appendChild(h('h1', { style: { fontSize: '20px', textAlign: 'center' } }, `${monthNames[month]} ${year}`));
+  navRow.appendChild(h('button', {
+    style: { background: 'none', border: 'none', color: canNext ? 'var(--text)' : 'var(--text-subtle)', fontSize: '18px', padding: '4px 8px', fontFamily: 'var(--font)', cursor: canNext ? 'pointer' : 'default' },
+    onClick: () => { if (canNext) { const m = month === 11 ? 0 : month + 1; const y = month === 11 ? year + 1 : year; setState({ progressMonth: { year: y, month: m } }); } }
+  }, '→'));
+  frag.appendChild(navRow);
+
+  const monthWorkouts = getMonthWorkouts(state.history, year, month);
+
+  // ── SECTION 1: CONSISTENCY ──
+  frag.appendChild(h('div', { className: 'label', style: { marginBottom: '8px' } }, 'Consistency'));
+
+  // Calendar heatmap
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  // Monday=0 mapping: JS getDay() returns 0=Sun, so Mon=0 means (getDay()+6)%7
+  const startDow = (firstDay.getDay() + 6) % 7; // 0=Mon, 6=Sun
+
+  // Build workout-by-day map
+  const dayMap = {};
+  monthWorkouts.forEach(w => {
+    const day = new Date(w.date).getDate();
+    if (!dayMap[day]) dayMap[day] = w.workoutType;
+  });
+
+  const grid = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px', marginBottom: '8px' } });
+  // Day headers
+  ['M','T','W','T','F','S','S'].forEach(d => {
+    grid.appendChild(h('div', { style: { textAlign: 'center', fontSize: '9px', color: 'var(--text-subtle)', paddingBottom: '2px' } }, d));
+  });
+  // Leading empty cells
+  for (let i = 0; i < startDow; i++) {
+    grid.appendChild(h('div', { style: { width: '28px', height: '28px' } }));
+  }
+  // Day cells
+  for (let d = 1; d <= daysInMonth; d++) {
+    const wType = dayMap[d];
+    const color = wType ? getWorkoutTypeColor(wType) : 'var(--border)';
+    const cell = h('div', { style: {
+      width: '28px', height: '28px', borderRadius: '4px',
+      background: wType ? color : 'transparent',
+      border: wType ? 'none' : '1px solid var(--border)',
+      opacity: wType ? '1' : '0.4',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: '9px', color: wType ? '#0C0C0C' : 'var(--text-subtle)', fontWeight: 700,
+      margin: '0 auto',
+    } }, String(d));
+    grid.appendChild(cell);
+  }
+  frag.appendChild(grid);
+
+  // Legend
+  const legend = h('div', { style: { display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '14px', flexWrap: 'wrap' } });
+  [['Push + Legs', 'var(--warn)'], ['Pull + Core', 'var(--success)'], ['Full Body', 'var(--accent)']].forEach(([label, color]) => {
+    const item = h('div', { style: { display: 'flex', alignItems: 'center', gap: '4px' } });
+    item.appendChild(h('div', { style: { width: '10px', height: '10px', borderRadius: '2px', background: color } }));
+    item.appendChild(h('span', { style: { fontSize: '9px', color: 'var(--text-dim)' } }, label));
+    legend.appendChild(item);
+  });
+  frag.appendChild(legend);
+
+  // Stats row
+  const sessions = monthWorkouts.length;
+  // Weeks elapsed: how many weeks (or partial) have passed in this month
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+  const lastDayOfMonth = isCurrentMonth ? now.getDate() : daysInMonth;
+  const weeksElapsed = Math.max(lastDayOfMonth / 7, 1);
+  const perWeek = Math.round((sessions / weeksElapsed) * 10) / 10;
+
+  // Streak: consecutive weeks with ≥3 sessions (Mon-Sun), counting backward
+  function calcStreak() {
+    // Build a map of all workouts by week (Mon-Sun)
+    function getWeekKey(date) {
+      const d = new Date(date);
+      // Get Monday of that week
+      const day = d.getDay();
+      const diff = (day === 0 ? -6 : 1) - day;
+      const mon = new Date(d);
+      mon.setDate(d.getDate() + diff);
+      return `${mon.getFullYear()}-${String(mon.getMonth()+1).padStart(2,'0')}-${String(mon.getDate()).padStart(2,'0')}`;
+    }
+
+    const weekCounts = {};
+    state.history.forEach(w => {
+      const key = getWeekKey(new Date(w.date));
+      weekCounts[key] = (weekCounts[key] || 0) + 1;
+    });
+
+    // Get sorted week keys
+    const allWeeks = Object.keys(weekCounts).sort().reverse();
+    if (allWeeks.length === 0) return 0;
+
+    // Find the current week's Monday
+    const today = new Date();
+    const currentWeekKey = getWeekKey(today);
+    // Most recent completed week = if current week has ≥3, include it, otherwise start from previous
+    let streak = 0;
+
+    // Generate consecutive week keys going backward from current week
+    function prevWeekKey(key) {
+      const d = new Date(key + 'T12:00:00');
+      d.setDate(d.getDate() - 7);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    let checkKey = currentWeekKey;
+    // If current week has ≥3, count it and move to previous
+    if ((weekCounts[checkKey] || 0) >= 3) {
+      streak++;
+      checkKey = prevWeekKey(checkKey);
+    } else {
+      // Current week doesn't qualify; start checking from previous completed week
+      checkKey = prevWeekKey(checkKey);
+    }
+
+    // Count backward
+    while ((weekCounts[checkKey] || 0) >= 3) {
+      streak++;
+      checkKey = prevWeekKey(checkKey);
+    }
+
+    return streak;
+  }
+
+  const streak = calcStreak();
+
+  const statsRow = h('div', { style: { display: 'flex', gap: '8px', marginBottom: '20px' } });
+  [['Sessions', String(sessions)], ['Per Week', String(perWeek)], ['Streak', `${streak}wk`]].forEach(([label, value]) => {
+    const stat = h('div', { className: 'card', style: { flex: 1, padding: '10px 8px', textAlign: 'center' } });
+    stat.appendChild(h('div', { style: { fontSize: '18px', fontWeight: 800, color: 'var(--accent)' } }, value));
+    stat.appendChild(h('div', { style: { fontSize: '9px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px' } }, label));
+    statsRow.appendChild(stat);
+  });
+  frag.appendChild(statsRow);
+
+  // ── SECTION 2: STRENGTH HIGHLIGHTS ──
+  frag.appendChild(h('div', { className: 'label', style: { marginBottom: '8px' } }, 'Strength Highlights'));
+
+  // New Bests
+  const newBests = [];
+  const exNamesThisMonth = new Set();
+  monthWorkouts.forEach(w => w.exercises.forEach(ex => exNamesThisMonth.add(ex.name)));
+
+  const priorWorkouts = state.history.filter(w => {
+    const d = new Date(w.date);
+    return d.getFullYear() < year || (d.getFullYear() === year && d.getMonth() < month);
+  });
+
+  exNamesThisMonth.forEach(name => {
+    // Get all instances this month
+    const monthExInstances = [];
+    monthWorkouts.forEach(w => w.exercises.filter(e => e.name === name).forEach(e => monthExInstances.push(e)));
+    if (monthExInstances.length === 0) return;
+
+    const type = monthExInstances[0].type;
+
+    // Get prior best
+    const priorInstances = [];
+    priorWorkouts.forEach(w => w.exercises.filter(e => e.name === name).forEach(e => priorInstances.push(e)));
+
+    let monthBest, priorBest;
+    if (type === 'weighted') {
+      monthBest = Math.max(...monthExInstances.map(e => calcBestSetVolume(e)));
+      priorBest = priorInstances.length > 0 ? Math.max(...priorInstances.map(e => calcBestSetVolume(e))) : 0;
+    } else if (type === 'timed') {
+      monthBest = Math.max(...monthExInstances.flatMap(e => e.sets.filter(s => typeof s === 'number')));
+      priorBest = priorInstances.length > 0 ? Math.max(...priorInstances.flatMap(e => e.sets.filter(s => typeof s === 'number')), 0) : 0;
+    } else {
+      monthBest = Math.max(...monthExInstances.flatMap(e => e.sets.filter(s => typeof s === 'number')));
+      priorBest = priorInstances.length > 0 ? Math.max(...priorInstances.flatMap(e => e.sets.filter(s => typeof s === 'number')), 0) : 0;
+    }
+
+    if (monthBest > priorBest && priorInstances.length > 0) {
+      let display;
+      if (type === 'weighted') display = `${Math.round(monthBest)} vol/set`;
+      else if (type === 'timed') display = formatTime(monthBest);
+      else display = `${monthBest} reps`;
+      newBests.push({ name, type, display });
+    }
+  });
+
+  if (newBests.length > 0) {
+    const bestsCard = h('div', { className: 'card', style: { padding: '12px', marginBottom: '10px' } });
+    bestsCard.appendChild(h('div', { style: { fontSize: '11px', fontWeight: 700, color: 'var(--text)', marginBottom: '8px' } }, 'New Bests'));
+    newBests.forEach(b => {
+      const row = h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' } });
+      const left = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } });
+      left.appendChild(h('span', { style: { fontSize: '12px', color: 'var(--text)' } }, b.name));
+      left.appendChild(h('span', { className: `pill ${pillClass(b.type)}` }, pillLabel(b.type)));
+      row.appendChild(left);
+      row.appendChild(h('span', { style: { fontSize: '12px', fontWeight: 700, color: 'var(--success)' } }, b.display));
+      bestsCard.appendChild(row);
+    });
+    frag.appendChild(bestsCard);
+  } else {
+    frag.appendChild(h('div', { style: { color: 'var(--text-subtle)', fontSize: '11px', marginBottom: '10px', fontStyle: 'italic' } }, 'No new bests this month'));
+  }
+
+  // Volume Trends (weighted only)
+  const weightedExNames = new Set();
+  monthWorkouts.forEach(w => w.exercises.filter(e => e.type === 'weighted').forEach(e => weightedExNames.add(e.name)));
+
+  if (weightedExNames.size > 0) {
+    // Find comparison month (previous month with data, default to month-1)
+    let compYear = month === 0 ? year - 1 : year;
+    let compMonth = month === 0 ? 11 : month - 1;
+    let compWorkouts = getMonthWorkouts(state.history, compYear, compMonth);
+    // If no data last month, try the month before
+    if (compWorkouts.length === 0) {
+      compYear = compMonth === 0 ? compYear - 1 : compYear;
+      compMonth = compMonth === 0 ? 11 : compMonth - 1;
+      compWorkouts = getMonthWorkouts(state.history, compYear, compMonth);
+    }
+
+    const trends = [];
+    weightedExNames.forEach(name => {
+      // This month: avg session volume
+      const thisMonthSessions = [];
+      monthWorkouts.forEach(w => {
+        w.exercises.filter(e => e.name === name).forEach(e => {
+          thisMonthSessions.push(calcVolume(e));
+        });
+      });
+      const thisAvg = thisMonthSessions.length > 0 ? thisMonthSessions.reduce((a, b) => a + b, 0) / thisMonthSessions.length : 0;
+
+      // Comparison month
+      const compSessions = [];
+      compWorkouts.forEach(w => {
+        w.exercises.filter(e => e.name === name).forEach(e => {
+          compSessions.push(calcVolume(e));
+        });
+      });
+      const compAvg = compSessions.length > 0 ? compSessions.reduce((a, b) => a + b, 0) / compSessions.length : 0;
+
+      if (thisAvg > 0) {
+        let arrow, pct, color;
+        if (compAvg === 0) {
+          arrow = ''; pct = 'new'; color = 'var(--text-muted)';
+        } else {
+          const change = ((thisAvg - compAvg) / compAvg) * 100;
+          arrow = change > 0 ? '↑' : change < 0 ? '↓' : '→';
+          pct = `${Math.abs(Math.round(change))}%`;
+          color = change > 0 ? 'var(--success)' : change < 0 ? 'var(--danger)' : 'var(--text-subtle)';
+        }
+        trends.push({ name, arrow, pct, color });
+      }
+    });
+
+    if (trends.length > 0) {
+      const trendsCard = h('div', { className: 'card', style: { padding: '12px', marginBottom: '20px' } });
+      trendsCard.appendChild(h('div', { style: { fontSize: '11px', fontWeight: 700, color: 'var(--text)', marginBottom: '8px' } }, 'Volume Trends'));
+      trends.forEach(t => {
+        const row = h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 0' } });
+        row.appendChild(h('span', { style: { fontSize: '11px', color: 'var(--text-muted)' } }, t.name));
+        row.appendChild(h('span', { style: { fontSize: '12px', fontWeight: 700, color: t.color } }, `${t.arrow} ${t.pct}`));
+        trendsCard.appendChild(row);
+      });
+      frag.appendChild(trendsCard);
+    }
+  }
+
+  // ── SECTION 3: PER-EXERCISE DETAIL ──
+  frag.appendChild(h('div', { className: 'label', style: { marginBottom: '8px' } }, 'Exercises'));
 
   // Build exercise list
   const map = new Map();
@@ -1176,8 +1548,6 @@ function renderProgress() {
     if (!existing || new Date(w.date) > new Date(existing.lastDate)) map.set(ex.name, { name: ex.name, type: ex.type, lastDate: w.date });
   }
   let exList = [...map.values()].sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate));
-
-  frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 14px' } }, `${exList.length} exercises tracked`));
 
   // Filter
   const filterRow = h('div', { style: { display: 'flex', gap: '5px', marginBottom: '14px', flexWrap: 'wrap' } });
@@ -1227,28 +1597,38 @@ function renderProgressDetail(frag) {
   frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '11px', margin: '4px 0 16px' } }, `${data.length} session${data.length !== 1 ? 's' : ''} logged`));
   frag.appendChild(h('div', { style: { marginBottom: '16px' } }, h('span', { className: `pill ${pillClass(exInfo.type)}` }, pillLabel(exInfo.type))));
 
-  const chartData = data.map(d => {
-    const valid = d.sets.filter(s => s !== 'skip');
-    const avg = valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
-    return { date: d.date, avg: Math.round(avg * 10) / 10, best: valid.length > 0 ? Math.max(...valid) : 0, weight: d.weight || 0 };
-  });
-  const labels = chartData.map(d => dateLbl(d.date));
+  let canvas1;
+  if (isWeighted) {
+    // Single volume chart for weighted exercises
+    const chartData = data.map(d => {
+      const volume = calcVolume(d);
+      return { date: d.date, volume };
+    });
+    const labels = chartData.map(d => dateLbl(d.date));
 
-  // Avg chart
-  frag.appendChild(h('div', { className: 'label' }, isTimed ? 'Avg Seconds per Set' : 'Avg Reps per Set'));
-  const canvas1 = h('canvas', { style: { width: '100%', height: '170px', marginBottom: '8px' } });
-  frag.appendChild(canvas1);
-  frag.appendChild(h('div', { style: { display: 'flex', gap: '16px', justifyContent: 'center', marginBottom: '20px' } },
-    h('span', { style: { fontSize: '9px', color: 'var(--accent)' } }, '— avg'),
-    h('span', { style: { fontSize: '9px', color: 'var(--success)' } }, '○ best')
-  ));
+    frag.appendChild(h('div', { className: 'label' }, 'Session Volume (weight × total reps)'));
+    canvas1 = h('canvas', { style: { width: '100%', height: '170px', marginBottom: '20px' } });
+    frag.appendChild(canvas1);
 
-  // Weight chart
-  let canvas2;
-  if (isWeighted && chartData.some(d => d.weight > 0)) {
-    frag.appendChild(h('div', { className: 'label' }, 'Weight'));
-    canvas2 = h('canvas', { style: { width: '100%', height: '130px', marginBottom: '20px' } });
-    frag.appendChild(canvas2);
+    requestAnimationFrame(() => {
+      if (canvas1.parentNode) drawChart(canvas1, chartData, 'volume', '#CDFF50', labels);
+    });
+  } else {
+    // Reps/timed: keep existing avg chart
+    const chartData = data.map(d => {
+      const valid = d.sets.filter(s => s !== 'skip');
+      const avg = valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
+      return { date: d.date, avg: Math.round(avg * 10) / 10 };
+    });
+    const labels = chartData.map(d => dateLbl(d.date));
+
+    frag.appendChild(h('div', { className: 'label' }, isTimed ? 'Avg Seconds per Set' : 'Avg Reps per Set'));
+    canvas1 = h('canvas', { style: { width: '100%', height: '170px', marginBottom: '20px' } });
+    frag.appendChild(canvas1);
+
+    requestAnimationFrame(() => {
+      if (canvas1.parentNode) drawChart(canvas1, chartData, 'avg', '#CDFF50', labels);
+    });
   }
 
   // Session log
@@ -1261,12 +1641,6 @@ function renderProgressDetail(frag) {
     right.appendChild(h('span', { style: { color: 'var(--text)' } }, d.sets.map(s => fmtVal(s, exInfo.type)).join(' / ')));
     row.appendChild(right);
     frag.appendChild(row);
-  });
-
-  // Draw charts after DOM insert
-  requestAnimationFrame(() => {
-    if (canvas1.parentNode) drawChart(canvas1, chartData, 'avg', '#CDFF50', labels);
-    if (canvas2?.parentNode) drawChart(canvas2, chartData, 'weight', '#FFD666', labels);
   });
 
   return frag;
