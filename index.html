@@ -152,8 +152,9 @@ canvas { width: 100% !important; height: 170px !important; }
 // DATABASE (IndexedDB)
 // ═══════════════════════════════════════
 const DB_NAME = 'progressive-overload';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE = 'workouts';
+const EX_STORE = 'exercises';
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -164,6 +165,9 @@ function openDB() {
         const store = db.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
         store.createIndex('workoutType', 'workoutType', { unique: false });
         store.createIndex('date', 'date', { unique: false });
+      }
+      if (!db.objectStoreNames.contains(EX_STORE)) {
+        db.createObjectStore(EX_STORE, { keyPath: 'key' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -212,6 +216,52 @@ async function clearAllWorkouts() {
   });
 }
 
+// ─── Exercise library ───
+function exKey(name) { return name.trim().toLowerCase(); }
+
+async function getAllExercises() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(EX_STORE, 'readonly');
+    const req = tx.objectStore(EX_STORE).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function putExercise(ex) {
+  const db = await openDB();
+  const record = {
+    key: exKey(ex.name),
+    name: ex.name.trim(),
+    type: ex.type,
+    bilateral: !!ex.bilateral,
+    createdAt: ex.createdAt || new Date().toISOString(),
+  };
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(EX_STORE, 'readwrite');
+    const req = tx.objectStore(EX_STORE).put(record);
+    req.onsuccess = () => resolve(record);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function seedExerciseLibrary(history) {
+  const existing = await getAllExercises();
+  const haveKeys = new Set(existing.map(e => e.key));
+  const toAdd = new Map();
+  const considerEx = (ex) => {
+    if (!ex || !ex.name) return;
+    const k = exKey(ex.name);
+    if (haveKeys.has(k) || toAdd.has(k)) return;
+    toAdd.set(k, { name: ex.name.trim(), type: ex.type || 'weighted', bilateral: !!ex.bilateral });
+  };
+  for (const list of Object.values(TEMPLATES)) for (const ex of list) considerEx(ex);
+  for (const w of history) for (const ex of w.exercises) considerEx(ex);
+  for (const ex of toAdd.values()) await putExercise(ex);
+  return await getAllExercises();
+}
+
 async function exportWorkouts() {
   const workouts = await getAllWorkouts();
   const payload = { version: 1, exportedAt: new Date().toISOString(), workouts };
@@ -246,7 +296,8 @@ function importWorkouts() {
         await addWorkout(workout);
       }
       const history = await getAllWorkouts();
-      setState({ history });
+      const library = await seedExerciseLibrary(history);
+      setState({ history, library });
     } catch {
       alert('Could not read backup file.');
     }
@@ -463,6 +514,87 @@ function getWorkoutTypeColor(type) {
   return 'var(--text-dim)';
 }
 
+// ─── Drag-and-drop reorder (Pointer Events) ───
+// Attach to a handle element. On drop, calls onReorder(fromIdx, toIdx).
+// isDraggable(idx) gates which indices can be dragged or moved past.
+function attachDragHandle(handleEl, listEl, rowSelector, fromIdx, isDraggable, onReorder) {
+  handleEl.style.touchAction = 'none';
+  handleEl.addEventListener('pointerdown', (e) => {
+    if (!isDraggable(fromIdx)) return;
+    e.preventDefault();
+    const rowEls = Array.from(listEl.querySelectorAll(rowSelector));
+    const row = rowEls[fromIdx];
+    if (!row) return;
+    const rowH = row.getBoundingClientRect().height;
+    const gap = rowEls.length > 1
+      ? rowEls[1].getBoundingClientRect().top - rowEls[0].getBoundingClientRect().bottom
+      : 0;
+    const step = rowH + Math.max(gap, 0);
+    let currentIdx = fromIdx;
+    const startY = e.clientY;
+    try { handleEl.setPointerCapture(e.pointerId); } catch {}
+
+    row.style.position = 'relative';
+    row.style.zIndex = '20';
+    row.style.boxShadow = '0 8px 22px rgba(0,0,0,0.5)';
+    row.style.transition = 'none';
+    rowEls.forEach((r, i) => { if (i !== fromIdx) r.style.transition = 'transform 0.15s ease'; });
+    document.body.style.userSelect = 'none';
+
+    function findMaxIdx() {
+      let i = rowEls.length - 1;
+      while (i > fromIdx && !isDraggable(i)) i--;
+      return i;
+    }
+    function findMinIdx() {
+      let i = 0;
+      while (i < fromIdx && !isDraggable(i)) i++;
+      return i;
+    }
+    const maxIdx = findMaxIdx();
+    const minIdx = findMinIdx();
+
+    function onMove(ev) {
+      const dy = ev.clientY - startY;
+      row.style.transform = `translateY(${dy}px)`;
+      let newIdx = fromIdx + Math.round(dy / step);
+      if (newIdx < minIdx) newIdx = minIdx;
+      if (newIdx > maxIdx) newIdx = maxIdx;
+      if (newIdx === currentIdx) return;
+      currentIdx = newIdx;
+      rowEls.forEach((r, i) => {
+        if (i === fromIdx) return;
+        let shift = 0;
+        if (newIdx > fromIdx && i > fromIdx && i <= newIdx) shift = -step;
+        else if (newIdx < fromIdx && i < fromIdx && i >= newIdx) shift = step;
+        r.style.transform = `translateY(${shift}px)`;
+      });
+    }
+    function onUp() {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      document.body.style.userSelect = '';
+      try { handleEl.releasePointerCapture(e.pointerId); } catch {}
+      if (currentIdx !== fromIdx) {
+        onReorder(fromIdx, currentIdx);
+      } else {
+        // reset visuals; no re-render needed
+        rowEls.forEach(r => {
+          r.style.transform = '';
+          r.style.transition = '';
+          r.style.zIndex = '';
+          r.style.boxShadow = '';
+          r.style.position = '';
+        });
+      }
+    }
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+  });
+}
+
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
   if (attrs) for (const [k, v] of Object.entries(attrs)) {
@@ -578,6 +710,15 @@ let state = {
   viewingWorkoutFrom: 'home',
   allWorkoutsLimit: 10,
   showExerciseManager: false,
+  library: [],
+  showNotesSheet: false,
+  showExercisePicker: false,
+  pickerQuery: '',
+  pickerCreating: false,
+  pickerContext: 'editList',
+  pickerNewType: 'weighted',
+  pickerNewBilateral: false,
+  pickerNewName: '',
 };
 
 function setState(partial) {
@@ -719,6 +860,163 @@ function renderSelectType() {
   return frag;
 }
 
+// ─── OVERLAY SHEETS ───
+function renderSheet(title, bodyEl, opts = {}) {
+  const onClose = opts.onClose || (() => {});
+  const backdrop = h('div', { style: {
+    position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.6)', zIndex: '100',
+    display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+    animation: 'fadeIn 0.15s ease',
+  } });
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) onClose(); });
+  const sheet = h('div', { style: {
+    background: 'var(--bg)', border: '1px solid var(--border)',
+    borderRadius: '12px 12px 0 0', padding: '16px 18px',
+    width: '100%', maxWidth: '420px', maxHeight: '80vh', overflow: 'auto',
+    paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+  } });
+  const header = h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' } });
+  header.appendChild(h('div', { style: { fontSize: '12px', fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '1.2px' } }, title));
+  header.appendChild(h('button', { style: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '20px', fontFamily: 'var(--font)', padding: '0 4px', cursor: 'pointer' }, onClick: onClose }, '×'));
+  sheet.appendChild(header);
+  sheet.appendChild(bodyEl);
+  backdrop.appendChild(sheet);
+  return backdrop;
+}
+
+function renderNotesSheet() {
+  const body = h('div', {});
+  const ta = h('textarea', { className: 'textarea', placeholder: 'Anything to remember for next time...', style: { minHeight: '120px' } });
+  ta.value = state.notes || '';
+  ta.addEventListener('input', (e) => { state.notes = e.target.value; });
+  body.appendChild(ta);
+  body.appendChild(h('div', { style: { height: '12px' } }));
+  body.appendChild(h('button', { className: 'btn btn-primary', onClick: () => setState({ showNotesSheet: false }) }, 'Done'));
+  setTimeout(() => ta.focus(), 50);
+  return renderSheet('session note', body, { onClose: () => setState({ showNotesSheet: false }) });
+}
+
+function renderExercisePicker() {
+  const body = h('div', {});
+  const q = (state.pickerQuery || '').trim().toLowerCase();
+  const usedKeys = new Set(state.exerciseList.map(e => exKey(e.name)));
+  const filtered = state.library
+    .filter(e => !usedKeys.has(e.key))
+    .filter(e => !q || e.name.toLowerCase().includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const addExercise = (lib) => {
+    const newEx = { name: lib.name, type: lib.type, bilateral: !!lib.bilateral };
+    if (state.pickerContext === 'logging') {
+      const newResult = { name: lib.name, type: lib.type, bilateral: !!lib.bilateral, weight: null, weightUnit: null, sets: [] };
+      setState({
+        exerciseList: [...state.exerciseList, newEx],
+        results: [...state.results, newResult],
+        showExercisePicker: false, pickerQuery: '', pickerCreating: false,
+      });
+    } else {
+      setState({
+        exerciseList: [...state.exerciseList, newEx],
+        showExercisePicker: false, pickerQuery: '', pickerCreating: false,
+      });
+    }
+  };
+
+  if (!state.pickerCreating) {
+    const search = h('input', { className: 'input', placeholder: 'Search exercises…', style: { marginBottom: '10px', fontSize: '14px' } });
+    search.value = state.pickerQuery || '';
+    search.addEventListener('input', (e) => {
+      state.pickerQuery = e.target.value;
+      // Re-render only the list portion to keep focus on the input
+      listEl.innerHTML = '';
+      buildList();
+    });
+    body.appendChild(search);
+
+    const listEl = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '12px' } });
+    const buildList = () => {
+      const qNow = (state.pickerQuery || '').trim().toLowerCase();
+      const items = state.library
+        .filter(e => !usedKeys.has(e.key))
+        .filter(e => !qNow || e.name.toLowerCase().includes(qNow))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      if (items.length === 0) {
+        listEl.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-dim)', padding: '8px 4px', fontStyle: 'italic' } }, 'No matching exercises.'));
+      } else {
+        items.forEach(lib => {
+          const row = h('button', {
+            style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px 12px', textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font)', color: 'var(--text)' },
+            onClick: () => addExercise(lib),
+          });
+          const left = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 } });
+          left.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, lib.name));
+          left.appendChild(h('span', { className: `pill ${pillClass(lib.type)}` }, pillLabel(lib.type)));
+          if (lib.bilateral) left.appendChild(h('span', { style: { fontSize: '9px', color: 'var(--text-dim)' } }, '1-side'));
+          row.appendChild(left);
+          row.appendChild(h('span', { style: { color: 'var(--text-dim)', fontSize: '14px' } }, '+'));
+          listEl.appendChild(row);
+        });
+      }
+    };
+    buildList();
+    body.appendChild(listEl);
+
+    body.appendChild(h('button', { className: 'btn btn-secondary', style: { fontSize: '12px' },
+      onClick: () => setState({ pickerCreating: true, pickerNewType: 'weighted', pickerNewBilateral: false, pickerNewName: state.pickerQuery || '' }) },
+      '+ Create new exercise'));
+  } else {
+    body.appendChild(h('div', { className: 'label' }, 'name'));
+    const nameInp = h('input', { className: 'input', placeholder: 'e.g. Hanging Knee Raises', style: { marginBottom: '12px', fontSize: '14px' } });
+    nameInp.value = state.pickerNewName || '';
+    nameInp.addEventListener('input', (e) => { state.pickerNewName = e.target.value; });
+    body.appendChild(nameInp);
+
+    body.appendChild(h('div', { className: 'label' }, 'type'));
+    const typeRow = h('div', { style: { display: 'flex', gap: '6px', marginBottom: '12px' } });
+    ['weighted', 'reps', 'timed'].forEach(t => {
+      const selected = state.pickerNewType === t;
+      typeRow.appendChild(h('button', {
+        style: { flex: 1, padding: '8px', background: selected ? '#CDFF5025' : 'var(--surface)', color: selected ? 'var(--accent)' : 'var(--text-muted)', border: `1px solid ${selected ? '#CDFF5033' : 'var(--border)'}`, borderRadius: '6px', fontFamily: 'var(--font)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' },
+        onClick: () => { state.pickerNewType = t; setState({}); }
+      }, t));
+    });
+    body.appendChild(typeRow);
+
+    const bilatRow = h('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', cursor: 'pointer', fontSize: '12px', color: 'var(--text-muted)' } });
+    const cb = h('input', { type: 'checkbox', style: { width: '16px', height: '16px', accentColor: 'var(--accent)' } });
+    cb.checked = !!state.pickerNewBilateral;
+    cb.addEventListener('change', (e) => { state.pickerNewBilateral = e.target.checked; });
+    bilatRow.appendChild(cb);
+    bilatRow.appendChild(h('span', null, 'Single-side exercise (e.g. lunges, split squats)'));
+    body.appendChild(bilatRow);
+
+    const btnRow = h('div', { style: { display: 'flex', gap: '8px' } });
+    btnRow.appendChild(h('button', { className: 'btn btn-ghost', style: { flex: 1 }, onClick: () => setState({ pickerCreating: false }) }, 'Cancel'));
+    btnRow.appendChild(h('button', { className: 'btn btn-primary', style: { flex: 2 }, onClick: async () => {
+      const name = (nameInp.value || state.pickerNewName || '').trim();
+      if (!name) { nameInp.focus(); return; }
+      if (state.library.some(e => e.key === exKey(name))) {
+        alert('An exercise with that name already exists.');
+        return;
+      }
+      await putExercise({ name, type: state.pickerNewType, bilateral: state.pickerNewBilateral });
+      const library = await getAllExercises();
+      state.library = library;
+      state.pickerNewName = '';
+      addExercise({ name, type: state.pickerNewType, bilateral: state.pickerNewBilateral });
+    } }, 'Save'));
+    body.appendChild(btnRow);
+
+    setTimeout(() => nameInp.focus(), 50);
+  }
+
+  return renderSheet(
+    state.pickerCreating ? 'new exercise' : 'add exercise',
+    body,
+    { onClose: () => setState({ showExercisePicker: false, pickerCreating: false, pickerQuery: '' }) }
+  );
+}
+
 // ─── EDIT LIST ───
 function renderEditList() {
   const frag = h('div', { className: 'fade-in' });
@@ -740,18 +1038,22 @@ function renderEditList() {
   // Exercise list
   const listEl = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '14px' } });
   state.exerciseList.forEach((ex, i) => {
-    const row = h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px 12px' } });
+    const row = h('div', { 'data-reorder-row': '1', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px 12px' } });
     const left = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 } });
+    const handle = h('span', { style: { fontSize: '16px', color: 'var(--text-subtle)', cursor: 'grab', padding: '0 4px 0 0', flexShrink: 0, lineHeight: 1, userSelect: 'none' } }, '⠿');
+    attachDragHandle(handle, listEl, '[data-reorder-row]', i, () => true, (from, to) => {
+      const l = [...state.exerciseList];
+      const [moved] = l.splice(from, 1);
+      l.splice(to, 0, moved);
+      setState({ exerciseList: l });
+    });
+    left.appendChild(handle);
     left.appendChild(h('span', { style: { fontSize: '11px', color: 'var(--text-subtle)', width: '16px', flexShrink: 0 } }, String(i + 1)));
     left.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' } }, ex.name));
     left.appendChild(h('span', { className: `pill ${pillClass(ex.type)}` }, pillLabel(ex.type)));
     row.appendChild(left);
 
     const controls = h('div', { style: { display: 'flex', gap: '2px', flexShrink: 0 } });
-    controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: i === 0 ? 'var(--text-subtle)' : 'var(--text-muted)', fontSize: '11px', padding: '2px 4px', fontFamily: 'var(--font)' },
-      onClick: () => { if (i > 0) { const l = [...state.exerciseList]; [l[i-1], l[i]] = [l[i], l[i-1]]; setState({ exerciseList: l }); } } }, '↑'));
-    controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: i === state.exerciseList.length - 1 ? 'var(--text-subtle)' : 'var(--text-muted)', fontSize: '11px', padding: '2px 4px', fontFamily: 'var(--font)' },
-      onClick: () => { if (i < state.exerciseList.length - 1) { const l = [...state.exerciseList]; [l[i], l[i+1]] = [l[i+1], l[i]]; setState({ exerciseList: l }); } } }, '↓'));
     controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '14px', padding: '2px 6px', fontFamily: 'var(--font)' },
       onClick: () => setState({ exerciseList: state.exerciseList.filter((_, j) => j !== i) }) }, '×'));
     row.appendChild(controls);
@@ -759,15 +1061,9 @@ function renderEditList() {
   });
   frag.appendChild(listEl);
 
-  // Add exercise
+  // Add exercise (opens picker)
   const addBtn = h('button', { className: 'btn btn-secondary', style: { marginBottom: '14px' }, onClick: () => {
-    const name = prompt('Exercise name:');
-    if (!name?.trim()) return;
-    const typeChoice = prompt('Type: weighted, reps, or timed', 'weighted');
-    const type = ['weighted', 'reps', 'timed'].includes(typeChoice) ? typeChoice : 'weighted';
-    const bilateralChoice = prompt('Is this a single-side exercise? (y/n)', 'n');
-    const bilateral = bilateralChoice && bilateralChoice.toLowerCase().startsWith('y');
-    setState({ exerciseList: [...state.exerciseList, { name: name.trim(), type, bilateral }] });
+    setState({ showExercisePicker: true, pickerContext: 'editList', pickerQuery: '', pickerCreating: false });
   }}, '+ Add Exercise');
   frag.appendChild(addBtn);
 
@@ -776,11 +1072,14 @@ function renderEditList() {
     setState({
       screen: 'logging', exIdx: 0, setIdx: 0, weight: '', weightUnit: 'lbs', weightConfirmed: false, inputVal: '',
       showExerciseManager: false,
+      notes: '',
       results: state.exerciseList.map(ex => ({ name: ex.name, type: ex.type, bilateral: ex.bilateral || false, weight: null, weightUnit: null, sets: [] }))
     });
   }}, `START (${state.exerciseList.length} exercises) →`);
   if (state.exerciseList.length === 0) startBtn.disabled = true;
   frag.appendChild(startBtn);
+
+  if (state.showExercisePicker) frag.appendChild(renderExercisePicker());
 
   return frag;
 }
@@ -807,20 +1106,27 @@ function renderLogging() {
   pbar.appendChild(h('div', { className: 'progress-bar-fill', style: { width: progress + '%' } }));
   frag.appendChild(pbar);
 
-  // Top row: back + undo
+  // Top row: back + notes + undo
   const topRow = h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' } });
   topRow.appendChild(h('button', { className: 'back-btn', style: { margin: 0 }, onClick: () => {
     const hasLoggedSets = results.some(r => r.sets.length > 0);
     if (hasLoggedSets && !confirm('You have sets logged. Discard this workout?')) return;
     setState({ screen: 'editList' });
   } }, '← back'));
+  const rightRow = h('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } });
+  const hasNote = !!(state.notes && state.notes.trim());
+  rightRow.appendChild(h('button', {
+    style: { background: 'none', border: 'none', color: hasNote ? 'var(--accent)' : 'var(--text-muted)', fontSize: '11px', fontFamily: 'var(--font)', padding: '4px 0', cursor: 'pointer' },
+    onClick: () => setState({ showNotesSheet: true })
+  }, hasNote ? '📝 note ✓' : '📝 add note'));
   const canUndo = result.sets.length > 0 || (weightConfirmed && result.sets.length === 0) || exIdx > 0;
   if (canUndo) {
-    topRow.appendChild(h('button', {
+    rightRow.appendChild(h('button', {
       style: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '11px', fontFamily: 'var(--font)', padding: '4px 0', cursor: 'pointer' },
       onClick: undoAction
     }, '↩ undo'));
   }
+  topRow.appendChild(rightRow);
   frag.appendChild(topRow);
 
   frag.appendChild(h('h1', null, ex.name));
@@ -1001,7 +1307,7 @@ function renderLogging() {
       const isDone = i < exIdx;
       const isCurrent = i === exIdx;
       const isUpcoming = i > exIdx;
-      const row = h('div', { style: {
+      const row = h('div', { 'data-reorder-row': '1', style: {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: isCurrent ? '#CDFF5010' : 'var(--surface)',
         border: `1px solid ${isCurrent ? '#CDFF5033' : 'var(--border)'}`,
@@ -1009,6 +1315,18 @@ function renderLogging() {
         opacity: isDone ? '0.5' : '1',
       }});
       const left = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 } });
+      if (isUpcoming) {
+        const handle = h('span', { style: { fontSize: '16px', color: 'var(--text-subtle)', cursor: 'grab', padding: '0 4px 0 0', flexShrink: 0, lineHeight: 1, userSelect: 'none' } }, '⠿');
+        attachDragHandle(handle, mgr, '[data-reorder-row]', i, (idx) => idx > exIdx, (from, to) => {
+          const l = [...state.exerciseList]; const r = JSON.parse(JSON.stringify(state.results));
+          const [mvL] = l.splice(from, 1); const [mvR] = r.splice(from, 1);
+          l.splice(to, 0, mvL); r.splice(to, 0, mvR);
+          setState({ exerciseList: l, results: r });
+        });
+        left.appendChild(handle);
+      } else {
+        left.appendChild(h('span', { style: { fontSize: '16px', color: 'transparent', padding: '0 4px 0 0', flexShrink: 0, lineHeight: 1 } }, '⠿'));
+      }
       left.appendChild(h('span', { style: { fontSize: '11px', color: 'var(--text-subtle)', width: '16px', flexShrink: 0 } }, String(i + 1)));
       left.appendChild(h('span', { style: { fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isCurrent ? 'var(--accent)' : 'var(--text)' } }, mex.name));
       left.appendChild(h('span', { className: `pill ${pillClass(mex.type)}` }, pillLabel(mex.type)));
@@ -1017,20 +1335,6 @@ function renderLogging() {
 
       if (isUpcoming) {
         const controls = h('div', { style: { display: 'flex', gap: '2px', flexShrink: 0 } });
-        controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: i === exIdx + 1 ? 'var(--text-subtle)' : 'var(--text-muted)', fontSize: '11px', padding: '2px 4px', fontFamily: 'var(--font)' },
-          onClick: () => {
-            if (i <= exIdx + 1) return;
-            const l = [...state.exerciseList]; const r = JSON.parse(JSON.stringify(state.results));
-            [l[i-1], l[i]] = [l[i], l[i-1]]; [r[i-1], r[i]] = [r[i], r[i-1]];
-            setState({ exerciseList: l, results: r });
-          } }, '↑'));
-        controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: i === exerciseList.length - 1 ? 'var(--text-subtle)' : 'var(--text-muted)', fontSize: '11px', padding: '2px 4px', fontFamily: 'var(--font)' },
-          onClick: () => {
-            if (i >= exerciseList.length - 1) return;
-            const l = [...state.exerciseList]; const r = JSON.parse(JSON.stringify(state.results));
-            [l[i], l[i+1]] = [l[i+1], l[i]]; [r[i], r[i+1]] = [r[i+1], r[i]];
-            setState({ exerciseList: l, results: r });
-          } }, '↓'));
         controls.appendChild(h('button', { style: { background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '14px', padding: '2px 6px', fontFamily: 'var(--font)' },
           onClick: () => {
             const l = state.exerciseList.filter((_, j) => j !== i);
@@ -1042,24 +1346,16 @@ function renderLogging() {
       mgr.appendChild(row);
     });
 
-    // Add exercise button
+    // Add exercise button (opens picker)
     mgr.appendChild(h('button', { className: 'btn btn-secondary', style: { marginTop: '4px', fontSize: '11px' }, onClick: () => {
-      const name = prompt('Exercise name:');
-      if (!name?.trim()) return;
-      const typeChoice = prompt('Type: weighted, reps, or timed', 'weighted');
-      const type = ['weighted', 'reps', 'timed'].includes(typeChoice) ? typeChoice : 'weighted';
-      const bilateralChoice = prompt('Is this a single-side exercise? (y/n)', 'n');
-      const bilateral = bilateralChoice && bilateralChoice.toLowerCase().startsWith('y');
-      const newEx = { name: name.trim(), type, bilateral };
-      const newResult = { name: name.trim(), type, bilateral, weight: null, weightUnit: null, sets: [] };
-      setState({
-        exerciseList: [...state.exerciseList, newEx],
-        results: [...state.results, newResult],
-      });
+      setState({ showExercisePicker: true, pickerContext: 'logging', pickerQuery: '', pickerCreating: false });
     }}, '+ Add Exercise'));
 
     frag.appendChild(mgr);
   }
+
+  if (state.showNotesSheet) frag.appendChild(renderNotesSheet());
+  if (state.showExercisePicker) frag.appendChild(renderExercisePicker());
 
   return frag;
 }
@@ -1702,7 +1998,8 @@ async function init() {
     for (const s of SEED) await addWorkout(s);
     history = await getAllWorkouts();
   }
-  setState({ history, screen: 'home', showBackupReminder: checkBackupReminder() });
+  const library = await seedExerciseLibrary(history);
+  setState({ history, library, screen: 'home', showBackupReminder: checkBackupReminder() });
 }
 
 init();
