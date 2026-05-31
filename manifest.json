@@ -4,8 +4,8 @@
   "description": "Track your lifts. Beat last time.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0C0C0C",
-  "theme_color": "#0C0C0C",
+  "background_color": "#131519",
+  "theme_color": "#131519",
   "orientation": "portrait",
   "icons": [
     {
