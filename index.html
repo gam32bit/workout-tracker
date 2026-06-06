@@ -78,7 +78,7 @@ input, textarea { font-family: var(--font-ui); -webkit-appearance: none; }
   white-space: nowrap;
 }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.btn-primary { background: var(--jade); color: var(--accent-ink); font-weight: 600; }
+.btn-primary { background: var(--jade); color: var(--accent-ink); font-weight: 600; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22); }
 .btn-soft { background: var(--surface-alt); color: var(--text); border: none; }
 .btn-secondary { background: var(--surface-alt); color: var(--text); border: none; }
 .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--line); }
@@ -168,6 +168,13 @@ h1 { font-family: var(--font-disp); font-size: 32px; font-weight: 700; letter-sp
   -webkit-tap-highlight-color: transparent;
 }
 .stepper-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.stepper-btn-lg {
+  width: 46px; height: 46px; border-radius: 23px; font-size: 15px; font-weight: 600;
+  border: none; background: rgba(255,255,255,0.04); color: var(--text-muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-family: var(--font-ui);
+  -webkit-tap-highlight-color: transparent; letter-spacing: -0.01em;
+}
+.stepper-btn-lg:disabled { opacity: 0.35; cursor: not-allowed; }
 .stepper-num {
   background: none; border: none; color: var(--text); cursor: pointer;
   font-family: var(--font-disp); font-variant-numeric: tabular-nums; font-weight: 600;
@@ -717,9 +724,12 @@ function areaChart(data, { color = 'var(--jade)', width = 320, height = 110, dot
 
 // Numeric stepper: − [tappable num] +. Tapping the num focuses an invisible
 // numeric input so the OS keyboard can override the stepped value.
-function numStepper({ value, min = 0, max = 999, step = 1, onChange }) {
-  const wrap = h('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '24px', position: 'relative' } });
+function numStepper({ value, min = 0, max = 999, step = 1, bigStep = null, onChange }) {
+  const gap = bigStep ? '12px' : '24px';
+  const wrap = h('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap, position: 'relative' } });
   const cur = { v: typeof value === 'number' ? value : (parseInt(value) || 0) };
+  const bigMinus = bigStep ? h('button', { className: 'stepper-btn-lg', onClick: () => set(cur.v - bigStep) }, '−' + bigStep) : null;
+  const bigPlus  = bigStep ? h('button', { className: 'stepper-btn-lg', onClick: () => set(cur.v + bigStep) }, '+' + bigStep) : null;
   const minus = h('button', { className: 'stepper-btn', onClick: () => set(cur.v - step) }, '−');
   const plus  = h('button', { className: 'stepper-btn', onClick: () => set(cur.v + step) }, '+');
   const display = h('button', { className: 'stepper-num', onClick: () => { input.focus(); input.select(); } }, String(cur.v));
@@ -736,9 +746,11 @@ function numStepper({ value, min = 0, max = 999, step = 1, onChange }) {
     input.value = String(cur.v);
     onChange && onChange(cur.v);
   }
+  if (bigMinus) wrap.appendChild(bigMinus);
   wrap.appendChild(minus);
   wrap.appendChild(display);
   wrap.appendChild(plus);
+  if (bigPlus) wrap.appendChild(bigPlus);
   wrap.appendChild(input);
   return wrap;
 }
@@ -1006,7 +1018,7 @@ function renderExercisePicker() {
   const addExercise = (lib) => {
     const newEx = { name: lib.name, type: lib.type, bilateral: !!lib.bilateral };
     if (state.pickerContext === 'logging') {
-      const newResult = { name: lib.name, type: lib.type, bilateral: !!lib.bilateral, weight: null, weightUnit: null, sets: [] };
+      const newResult = { name: lib.name, type: lib.type, bilateral: !!lib.bilateral, weight: null, weightUnit: null, sets: [], setWeights: [] };
       setState({
         exerciseList: [...state.exerciseList, newEx],
         results: [...state.results, newResult],
@@ -1172,7 +1184,7 @@ function renderEditList() {
       screen: 'logging', exIdx: 0, setIdx: 0, weight: '', weightUnit: 'lbs', weightConfirmed: false, inputVal: '',
       showExerciseManager: false,
       notes: '',
-      results: state.exerciseList.map(ex => ({ name: ex.name, type: ex.type, bilateral: ex.bilateral || false, weight: null, weightUnit: null, sets: [] }))
+      results: state.exerciseList.map(ex => ({ name: ex.name, type: ex.type, bilateral: ex.bilateral || false, weight: null, weightUnit: null, sets: [], setWeights: [] }))
     });
   }}, `Start · ${state.exerciseList.length} exercises`);
   if (state.exerciseList.length === 0) startBtn.disabled = true;
@@ -1194,7 +1206,7 @@ function renderLogging() {
   const hist = getExHistory(history, ex.name);
   const lastData = hist.length > 0 ? hist[hist.length - 1] : null;
   const lastSets = lastData?.sets || [];
-  const needsWeight = isWeighted && !weightConfirmed && result.sets.length === 0;
+  const needsWeight = isWeighted && !weightConfirmed;
 
   const progress = ((exIdx * DEFAULT_SETS + setIdx) / (exerciseList.length * DEFAULT_SETS)) * 100;
 
@@ -1235,7 +1247,15 @@ function renderLogging() {
   titleL.appendChild(h('div', { style: { color: 'var(--text-muted)', fontSize: '15px', marginTop: '6px' } }, `Exercise ${exIdx + 1} of ${exerciseList.length}`));
   titleRow.appendChild(titleL);
   if (result.weight) {
-    titleRow.appendChild(h('span', { className: 'pill pill-weight', style: { marginTop: '10px', flexShrink: 0 } }, `${result.weight} ${result.weightUnit}`));
+    if (isWeighted) {
+      titleRow.appendChild(h('button', {
+        className: 'pill pill-weight',
+        style: { marginTop: '10px', flexShrink: 0, border: 'none', cursor: 'pointer', fontFamily: 'var(--font-ui)' },
+        onClick: () => { state.weight = String(result.weight); state.weightUnit = result.weightUnit || 'lbs'; setState({ weightConfirmed: false }); }
+      }, `${result.weight} ${result.weightUnit} · edit`));
+    } else {
+      titleRow.appendChild(h('span', { className: 'pill pill-weight', style: { marginTop: '10px', flexShrink: 0 } }, `${result.weight} ${result.weightUnit}`));
+    }
   } else {
     titleRow.appendChild(h('span', { className: `pill ${pillClass(ex.type)}`, style: { marginTop: '10px', flexShrink: 0 } }, pillLabel(ex.type)));
   }
@@ -1270,8 +1290,15 @@ function renderLogging() {
       box.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' } }, `Set ${i + 1}`));
 
       const lastVal = lastSets[i];
-      const d = buildDelta(s, result.weight, lastVal, lastData?.weight, ex.type);
+      const setWeight = (result.setWeights && result.setWeights[i] != null) ? result.setWeights[i] : result.weight;
+      const d = buildDelta(s, setWeight, lastVal, lastData?.weight, ex.type);
       if (d) box.appendChild(h('div', { style: { fontSize: '11px', color: d.color, marginTop: '2px', fontWeight: 600 } }, d.text));
+
+      const resultSetWeights = result.setWeights || [];
+      const uniqRW = resultSetWeights.filter(w => w != null).filter((w, j, a) => a.indexOf(w) === j);
+      if (uniqRW.length > 1 && resultSetWeights[i] != null && s !== 'skip') {
+        box.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', fontWeight: 600 } }, `${resultSetWeights[i]} ${result.weightUnit}`));
+      }
 
       setsRow.appendChild(box);
     });
@@ -1280,16 +1307,21 @@ function renderLogging() {
   }
 
   if (needsWeight) {
-    frag.appendChild(h('div', { style: { fontSize: '14px', color: 'var(--text-muted)', marginTop: '24px', marginBottom: '8px' } },
-      `Weight${lastData?.weight ? ` (last: ${lastData.weight} ${lastData.weightUnit || 'lbs'})` : ''}`));
+    const isEditingWeight = result.sets.length > 0 || result.weight != null;
+    const labelText = isEditingWeight
+      ? 'Change weight for upcoming sets'
+      : `Weight${lastData?.weight ? ` (last: ${lastData.weight} ${lastData.weightUnit || 'lbs'})` : ''}`;
+    frag.appendChild(h('div', { style: { fontSize: '14px', color: 'var(--text-muted)', marginTop: '24px', marginBottom: '8px' } }, labelText));
     const row = h('div', { style: { display: 'flex', gap: '10px', marginBottom: '14px' } });
+    const initialWeight = result.weight != null ? String(result.weight) : (lastData?.weight ? String(lastData.weight) : '');
     const inp = h('input', { className: 'input', type: 'number', inputMode: 'numeric', placeholder: 'Weight',
-      value: lastData?.weight ? String(lastData.weight) : '',
+      value: initialWeight,
       style: { flex: 1 } });
     inp.addEventListener('input', (e) => { state.weight = e.target.value; });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmWeightAction(); });
-    if (lastData?.weight) state.weight = String(lastData.weight);
-    if (lastData?.weightUnit) state.weightUnit = lastData.weightUnit;
+    if (initialWeight) state.weight = initialWeight;
+    if (result.weightUnit) state.weightUnit = result.weightUnit;
+    else if (lastData?.weightUnit) state.weightUnit = lastData.weightUnit;
     row.appendChild(inp);
 
     const unitToggle = h('div', { style: { display: 'flex', borderRadius: '14px', overflow: 'hidden', background: 'var(--surface-alt)' } });
@@ -1302,7 +1334,12 @@ function renderLogging() {
     row.appendChild(unitToggle);
     frag.appendChild(row);
 
-    frag.appendChild(h('button', { className: 'btn btn-primary', onClick: confirmWeightAction }, 'Confirm weight'));
+    const btnRow = h('div', { style: { display: 'flex', gap: '10px' } });
+    btnRow.appendChild(h('button', { className: 'btn btn-primary', style: { flex: 1 }, onClick: confirmWeightAction }, isEditingWeight ? 'Update weight' : 'Confirm weight'));
+    if (isEditingWeight) {
+      btnRow.appendChild(h('button', { className: 'btn btn-ghost', style: { flex: '0 0 auto', padding: '18px 18px' }, onClick: () => setState({ weightConfirmed: true }) }, 'Cancel'));
+    }
+    frag.appendChild(btnRow);
     setTimeout(() => inp.focus(), 50);
   } else {
     // Set entry: stepper for reps; freeform input for timed.
@@ -1348,7 +1385,7 @@ function renderLogging() {
       const initV = !isNaN(startV) ? startV : 0;
       state.inputVal = String(initV);
       const stepper = numStepper({
-        value: initV, min: 0, max: 999, step: 1,
+        value: initV, min: 0, max: 999, step: 1, bigStep: 5,
         onChange: (v) => { state.inputVal = String(v); updatePreview(state.inputVal); },
       });
       stepper.style.marginTop = '12px';
@@ -1489,6 +1526,8 @@ function logSetAction() {
 
   const newResults = JSON.parse(JSON.stringify(results));
   newResults[exIdx].sets.push(value);
+  if (!newResults[exIdx].setWeights) newResults[exIdx].setWeights = [];
+  newResults[exIdx].setWeights.push(newResults[exIdx].weight ?? null);
 
   if (setIdx + 1 < DEFAULT_SETS) {
     setState({ results: newResults, setIdx: setIdx + 1, inputVal: '' });
@@ -1500,6 +1539,8 @@ function logSetAction() {
 function skipSetAction() {
   const newResults = JSON.parse(JSON.stringify(state.results));
   newResults[state.exIdx].sets.push('skip');
+  if (!newResults[state.exIdx].setWeights) newResults[state.exIdx].setWeights = [];
+  newResults[state.exIdx].setWeights.push(null);
   if (state.setIdx + 1 < DEFAULT_SETS) {
     setState({ results: newResults, setIdx: state.setIdx + 1, inputVal: '' });
   } else {
@@ -1513,7 +1554,7 @@ function advanceExercise(results) {
   if (state.exIdx + 1 < state.exerciseList.length) {
     setState({ results, exIdx: state.exIdx + 1, setIdx: 0, weight: '', weightUnit: 'lbs', weightConfirmed: false, inputVal: '' });
   } else {
-    setState({ results, screen: 'review', notes: '', workoutDate: null, showDatePicker: false });
+    setState({ results, screen: 'review', workoutDate: null, showDatePicker: false });
   }
 }
 
@@ -1531,6 +1572,7 @@ function undoAction() {
   if (result.sets.length > 0) {
     const newResults = JSON.parse(JSON.stringify(results));
     newResults[exIdx].sets.pop();
+    if (newResults[exIdx].setWeights?.length) newResults[exIdx].setWeights.pop();
     const newSetIdx = newResults[exIdx].sets.length;
     setState({ results: newResults, setIdx: newSetIdx, inputVal: '' });
     return;
@@ -1541,6 +1583,7 @@ function undoAction() {
     const newResults = JSON.parse(JSON.stringify(results));
     if (newResults[exIdx - 1].sets.length > 0) {
       newResults[exIdx - 1].sets.pop();
+      if (newResults[exIdx - 1].setWeights?.length) newResults[exIdx - 1].setWeights.pop();
     }
     const prevSets = newResults[exIdx - 1].sets;
     const prevEx = exerciseList[exIdx - 1];
@@ -1600,7 +1643,10 @@ function renderReview() {
     const header = h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' } });
     header.appendChild(h('span', { style: { fontSize: '16px', fontWeight: 600, color: 'var(--text)' } }, ex.name));
     header.appendChild(h('span', { className: `pill ${pillClass(ex.type)}` }, pillLabel(ex.type)));
-    if (ex.weight) header.appendChild(h('span', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, `@ ${ex.weight} ${ex.weightUnit}`));
+    const exSetWeights = ex.setWeights || [];
+    const uniqExW = exSetWeights.filter(w => w != null).filter((w, i, a) => a.indexOf(w) === i);
+    const variedW = uniqExW.length > 1;
+    if (ex.weight && !variedW) header.appendChild(h('span', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, `@ ${ex.weight} ${ex.weightUnit}`));
     card.appendChild(header);
 
     const setsRow = h('div', { style: { display: 'flex', gap: '8px' } });
@@ -1624,9 +1670,13 @@ function renderReview() {
       });
       btn.appendChild(h('div', { className: 'num', style: { fontSize: '22px', color: isSkip ? 'var(--warn)' : 'var(--text)' } }, fmtVal(s, ex.type)));
       btn.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' } }, `Set ${sIdx + 1}`));
+      if (variedW && exSetWeights[sIdx] != null && !isSkip) {
+        btn.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', fontWeight: 600 } }, `${exSetWeights[sIdx]} ${ex.weightUnit}`));
+      }
 
       const lastVal = lastSets[sIdx];
-      const d = buildDelta(s, ex.weight, lastVal, lastData?.weight, ex.type);
+      const setWeight = exSetWeights[sIdx] != null ? exSetWeights[sIdx] : ex.weight;
+      const d = buildDelta(s, setWeight, lastVal, lastData?.weight, ex.type);
       if (d) btn.appendChild(h('div', { style: { fontSize: '11px', color: d.color, marginTop: '2px', fontWeight: 600 } }, d.text));
 
       setsRow.appendChild(btn);
@@ -1699,7 +1749,10 @@ function renderWorkoutDetail() {
     const header = h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' } });
     header.appendChild(h('span', { style: { fontSize: '16px', fontWeight: 600, color: 'var(--text)' } }, ex.name));
     header.appendChild(h('span', { className: `pill ${pillClass(ex.type)}` }, pillLabel(ex.type)));
-    if (ex.weight) header.appendChild(h('span', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, `@ ${ex.weight} ${ex.weightUnit}`));
+    const setWeights = ex.setWeights || [];
+    const uniqueWeights = setWeights.filter(w => w != null).filter((w, i, a) => a.indexOf(w) === i);
+    const varied = uniqueWeights.length > 1;
+    if (ex.weight && !varied) header.appendChild(h('span', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, `@ ${ex.weight} ${ex.weightUnit}`));
     card.appendChild(header);
 
     const setsRow = h('div', { style: { display: 'flex', gap: '8px' } });
@@ -1708,6 +1761,9 @@ function renderWorkoutDetail() {
       const setBox = h('div', { className: isSkip ? 'set-box set-box-skip' : 'set-box' });
       setBox.appendChild(h('div', { className: 'num', style: { fontSize: '22px', color: isSkip ? 'var(--warn)' : 'var(--text)' } }, fmtVal(s, ex.type)));
       setBox.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' } }, `Set ${sIdx + 1}`));
+      if (varied && setWeights[sIdx] != null && !isSkip) {
+        setBox.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', fontWeight: 600 } }, `${setWeights[sIdx]} ${ex.weightUnit}`));
+      }
       const lastVal = prevSets[sIdx];
       if (typeof s === 'number' && typeof lastVal === 'number') {
         const delta = s - lastVal;
