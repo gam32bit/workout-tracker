@@ -1,4 +1,4 @@
-const CACHE_NAME = 'overload-v3';
+const CACHE_NAME = 'overload-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -23,6 +23,7 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET') return;
   e.respondWith(
     fetch(e.request)
       .then((response) => {
@@ -32,6 +33,11 @@ self.addEventListener('fetch', (e) => {
         }
         return response;
       })
-      .catch(() => caches.match(e.request).then((cached) => cached || caches.match('./index.html')))
+      .catch(() => caches.match(e.request).then((cached) => {
+        if (cached) return cached;
+        // Only fall back to the app shell for page navigations
+        if (e.request.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
+      }))
   );
 });

@@ -5,13 +5,16 @@ A lightweight, mobile-first PWA for tracking gym workouts and monitoring progres
 ## Features
 
 - **Log workouts** — Select a workout type, customize your exercise list, and log sets/reps/weight as you go
-- **Progressive overload tracking** — See how each set compares to your last session with inline deltas (+/- indicators)
+- **Progressive overload tracking** — See how each set compares to your last session with inline deltas (+/- indicators); kg and lbs sessions are compared on a normalized scale
+- **Crash-safe sessions** — In-progress workouts are saved continuously; if the app is killed mid-session you can resume right where you left off
 - **Progress charts** — Visualize trends for any exercise over time with per-exercise history graphs
-- **Workout history** — Browse all past sessions; view full details for any workout
+- **Workout history** — Browse all past sessions; view full details for any workout, or delete one
 - **Past workout logging** — Optionally backfill sessions with a custom date
 - **Workout templates** — Built-in templates for Push + Legs, Pull + Core, and Full Body; templates auto-update based on your last session for that type
 - **Exercise types** — Supports weighted (lbs/kg), reps-only, and timed exercises
+- **Flexible sets** — Three sets per exercise by default, with extra sets available on demand
 - **Undo last set** — Remove the most recently logged set while mid-session
+- **Backup & restore** — Export workouts and your exercise library to a JSON file; imports validate records and skip duplicates
 - **Works offline** — Service worker caches the app for full offline use
 - **No account required** — All data is stored locally in IndexedDB; nothing leaves your device
 
