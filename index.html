@@ -309,10 +309,11 @@ async function seedExerciseLibrary(history) {
 
 async function exportWorkouts() {
   const workouts = await getAllWorkouts();
-  const payload = { version: 1, exportedAt: new Date().toISOString(), workouts };
+  const exercises = await getAllExercises();
+  const payload = { version: 2, exportedAt: new Date().toISOString(), workouts, exercises };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  const date = new Date().toISOString().slice(0, 10);
+  const date = localDateKey(new Date());
   const a = document.createElement('a');
   a.href = url; a.download = `workout-backup-${date}.json`;
   document.body.appendChild(a); a.click();
@@ -334,11 +335,35 @@ function importWorkouts() {
         alert('Invalid backup file.');
         return;
       }
-      const ok = confirm(`Import ${data.workouts.length} workout(s)? They will be added to your existing data.`);
+      const isValidWorkout = (w) => w && typeof w === 'object'
+        && typeof w.workoutType === 'string'
+        && typeof w.date === 'string' && !isNaN(new Date(w.date))
+        && Array.isArray(w.exercises)
+        && w.exercises.every(e => e && typeof e.name === 'string' && Array.isArray(e.sets));
+      const valid = data.workouts.filter(isValidWorkout);
+      const invalidCount = data.workouts.length - valid.length;
+      const existingKeys = new Set((await getAllWorkouts()).map(w => `${w.date}|${w.workoutType}`));
+      const toImport = valid.filter(w => !existingKeys.has(`${w.date}|${w.workoutType}`));
+      const dupCount = valid.length - toImport.length;
+      const skipped = (dupCount ? ` ${dupCount} duplicate(s) will be skipped.` : '')
+        + (invalidCount ? ` ${invalidCount} invalid record(s) will be skipped.` : '');
+      if (toImport.length === 0) {
+        alert('Nothing new to import.' + skipped);
+        return;
+      }
+      const ok = confirm(`Import ${toImport.length} workout(s)?${skipped}`);
       if (!ok) return;
-      for (const w of data.workouts) {
+      for (const w of toImport) {
         const { id: _id, ...workout } = w;
         await addWorkout(workout);
+      }
+      if (Array.isArray(data.exercises)) {
+        const haveKeys = new Set((await getAllExercises()).map(e => e.key));
+        for (const ex of data.exercises) {
+          if (!ex || typeof ex.name !== 'string' || !ex.name.trim()) continue;
+          if (haveKeys.has(exKey(ex.name))) continue;
+          await putExercise({ name: ex.name, type: ex.type || 'weighted', bilateral: ex.bilateral, createdAt: ex.createdAt });
+        }
       }
       const history = await getAllWorkouts();
       const library = await seedExerciseLibrary(history);
@@ -353,11 +378,48 @@ function importWorkouts() {
 function checkBackupReminder() {
   const lastBackup = localStorage.getItem('lastBackupDate');
   const dismissed = localStorage.getItem('backupReminderDismissed');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   if (dismissed === today) return false;
   if (!lastBackup) return true;
   const daysSince = (Date.now() - new Date(lastBackup)) / (1000 * 60 * 60 * 24);
   return daysSince >= 7;
+}
+
+// ─── In-progress workout persistence ───
+// Snapshot the active session so a killed tab (phone lock, app switch)
+// doesn't lose logged sets.
+const IN_PROGRESS_KEY = 'inProgressWorkout';
+
+function saveInProgress() {
+  try {
+    localStorage.setItem(IN_PROGRESS_KEY, JSON.stringify({
+      screen: state.screen,
+      workoutType: state.workoutType,
+      exerciseList: state.exerciseList,
+      results: state.results,
+      exIdx: state.exIdx,
+      setIdx: state.setIdx,
+      notes: state.notes,
+      weightConfirmed: state.weightConfirmed,
+      weightUnit: state.weightUnit,
+      savedAt: new Date().toISOString(),
+    }));
+  } catch {}
+}
+
+function clearInProgress() {
+  try { localStorage.removeItem(IN_PROGRESS_KEY); } catch {}
+}
+
+function getInProgress() {
+  try {
+    const raw = localStorage.getItem(IN_PROGRESS_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || !d.workoutType || !Array.isArray(d.exerciseList) || !Array.isArray(d.results)) return null;
+    if (d.exerciseList.length === 0) return null;
+    return d;
+  } catch { return null; }
 }
 
 // ═══════════════════════════════════════
@@ -485,6 +547,15 @@ const DEFAULT_SETS = 3;
 // ═══════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════
+const LBS_PER_KG = 2.2046226218;
+function toLbs(weight, unit) { return unit === 'kg' ? weight * LBS_PER_KG : weight; }
+
+// YYYY-MM-DD in *local* time (toISOString shifts days near midnight)
+function localDateKey(d) {
+  d = d instanceof Date ? d : new Date(d);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function formatTime(s) {
   if (s == null) return '—';
   const m = Math.floor(s / 60), sec = s % 60;
@@ -518,12 +589,12 @@ function getExHistory(history, name) {
   return r;
 }
 
-function buildDelta(curVal, curWeight, lastVal, lastWeight, type) {
+function buildDelta(curVal, curWeight, curUnit, lastVal, lastWeight, lastUnit, type) {
   if (typeof curVal !== 'number' || typeof lastVal !== 'number') return null;
   let delta, text;
   if (type === 'weighted' && typeof curWeight === 'number' && typeof lastWeight === 'number') {
-    const curVol = curVal * curWeight;
-    const lastVol = lastVal * lastWeight;
+    const curVol = Math.round(curVal * toLbs(curWeight, curUnit));
+    const lastVol = Math.round(lastVal * toLbs(lastWeight, lastUnit));
     delta = curVol - lastVol;
     text = delta > 0 ? `+${delta} vol` : delta === 0 ? '= vol' : `${delta} vol`;
   } else {
@@ -546,10 +617,11 @@ function getMonthWorkouts(history, year, month) {
   });
 }
 
+// Volume normalized to lbs so kg and lbs sessions are comparable
 function calcVolume(ex) {
   if (ex.type !== 'weighted' || !ex.weight) return 0;
   const reps = ex.sets.filter(s => typeof s === 'number').reduce((a, b) => a + b, 0);
-  return ex.weight * reps;
+  return Math.round(toLbs(ex.weight, ex.weightUnit) * reps);
 }
 
 function getWorkoutTypeColor(type) {
@@ -795,6 +867,7 @@ let state = {
 
 function setState(partial) {
   Object.assign(state, partial);
+  if (state.screen === 'logging' || state.screen === 'review') saveInProgress();
   render();
 }
 
@@ -857,10 +930,42 @@ function renderHome() {
     const actions = h('div', { className: 'backup-banner-actions' });
     actions.appendChild(h('button', { className: 'btn btn-soft', style: { flex: 1, fontSize: '14px', padding: '10px' }, onClick: exportWorkouts }, 'Export now'));
     actions.appendChild(h('button', { className: 'btn btn-ghost', style: { fontSize: '14px', padding: '10px' },
-      onClick: () => { localStorage.setItem('backupReminderDismissed', new Date().toISOString().slice(0, 10)); setState({ showBackupReminder: false }); }
+      onClick: () => { localStorage.setItem('backupReminderDismissed', localDateKey(new Date())); setState({ showBackupReminder: false }); }
     }, 'Dismiss'));
     banner.appendChild(actions);
     frag.appendChild(banner);
+  }
+
+  // Resume in-progress workout
+  const inProgress = getInProgress();
+  if (inProgress) {
+    const setsLogged = inProgress.results.reduce((n, r) => n + (r.sets ? r.sets.length : 0), 0);
+    const card = h('div', { className: 'card', style: { marginBottom: '16px', border: '1px solid rgba(95,211,168,0.35)' } });
+    card.appendChild(h('div', { className: 'eyebrow', style: { color: 'var(--jade)' } }, 'Workout in progress'));
+    card.appendChild(h('div', { style: { fontSize: '15px', color: 'var(--text)', margin: '6px 0 12px' } },
+      `${inProgress.workoutType} · ${setsLogged} set${setsLogged !== 1 ? 's' : ''} logged`));
+    const row = h('div', { style: { display: 'flex', gap: '8px' } });
+    row.appendChild(h('button', { className: 'btn btn-primary', style: { flex: 1, fontSize: '15px', padding: '12px' }, onClick: () => {
+      setState({
+        screen: inProgress.screen === 'review' ? 'review' : 'logging',
+        workoutType: inProgress.workoutType,
+        exerciseList: inProgress.exerciseList,
+        results: inProgress.results,
+        exIdx: Math.min(inProgress.exIdx || 0, inProgress.exerciseList.length - 1),
+        setIdx: inProgress.setIdx || 0,
+        notes: inProgress.notes || '',
+        weightConfirmed: !!inProgress.weightConfirmed,
+        weightUnit: inProgress.weightUnit || 'lbs',
+        weight: '', inputVal: '', workoutDate: null, showDatePicker: false, showExerciseManager: false,
+      });
+    } }, 'Resume'));
+    row.appendChild(h('button', { className: 'btn btn-ghost', style: { fontSize: '15px', padding: '12px 16px' }, onClick: () => {
+      if (!confirm('Discard the in-progress workout?')) return;
+      clearInProgress();
+      setState({});
+    } }, 'Discard'));
+    card.appendChild(row);
+    frag.appendChild(card);
   }
 
   // Primary + ghost CTAs
@@ -870,6 +975,23 @@ function renderHome() {
   if (state.history.length === 0) { progBtn.disabled = true; }
   btns.appendChild(progBtn);
   frag.appendChild(btns);
+
+  // Empty state with optional sample data
+  if (state.history.length === 0) {
+    const empty = h('div', { className: 'card', style: { textAlign: 'center', padding: '24px 20px', marginBottom: '14px' } });
+    empty.appendChild(h('div', { style: { fontSize: '15px', color: 'var(--text-muted)', lineHeight: 1.5 } },
+      'No workouts yet. Log your first session, or load sample data to explore the app.'));
+    empty.appendChild(h('div', { style: { height: '14px' } }));
+    const sampleBtn = h('button', { className: 'btn btn-ghost', style: { fontSize: '14px', padding: '12px' }, onClick: async () => {
+      sampleBtn.disabled = true;
+      for (const s of SEED) await addWorkout(s);
+      const history = await getAllWorkouts();
+      const library = await seedExerciseLibrary(history);
+      setState({ history, library });
+    } }, 'Load sample data');
+    empty.appendChild(sampleBtn);
+    frag.appendChild(empty);
+  }
 
   // Recent workouts
   if (state.history.length > 0) {
@@ -908,12 +1030,12 @@ function renderHome() {
     })();
     const perWeek = Math.round((totalSessions / weeksSpan) * 10) / 10;
     const streak = (() => {
-      const days = new Set(state.history.map(w => new Date(w.date).toISOString().slice(0,10)));
+      const days = new Set(state.history.map(w => localDateKey(w.date)));
       let s = 0;
       const today = new Date(); today.setHours(0,0,0,0);
       for (let i = 0; i < 60; i++) {
         const d = new Date(today); d.setDate(today.getDate() - i);
-        if (days.has(d.toISOString().slice(0,10))) s++;
+        if (days.has(localDateKey(d))) s++;
         else if (i > 0) break;
       }
       return s;
@@ -1208,7 +1330,7 @@ function renderLogging() {
   const lastSets = lastData?.sets || [];
   const needsWeight = isWeighted && !weightConfirmed;
 
-  const progress = ((exIdx * DEFAULT_SETS + setIdx) / (exerciseList.length * DEFAULT_SETS)) * 100;
+  const progress = ((exIdx * DEFAULT_SETS + Math.min(setIdx, DEFAULT_SETS)) / (exerciseList.length * DEFAULT_SETS)) * 100;
 
   const frag = h('div', { className: 'fade-in' });
 
@@ -1222,6 +1344,7 @@ function renderLogging() {
   topRow.appendChild(h('button', { className: 'back-btn', style: { margin: 0 }, onClick: () => {
     const hasLoggedSets = results.some(r => r.sets.length > 0);
     if (hasLoggedSets && !confirm('You have sets logged. Discard this workout?')) return;
+    clearInProgress();
     setState({ screen: 'editList' });
   } }, '← Back'));
   const rightRow = h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px' } });
@@ -1291,7 +1414,7 @@ function renderLogging() {
 
       const lastVal = lastSets[i];
       const setWeight = (result.setWeights && result.setWeights[i] != null) ? result.setWeights[i] : result.weight;
-      const d = buildDelta(s, setWeight, lastVal, lastData?.weight, ex.type);
+      const d = buildDelta(s, setWeight, result.weightUnit, lastVal, lastData?.weight, lastData?.weightUnit, ex.type);
       if (d) box.appendChild(h('div', { style: { fontSize: '11px', color: d.color, marginTop: '2px', fontWeight: 600 } }, d.text));
 
       const resultSetWeights = result.setWeights || [];
@@ -1344,7 +1467,8 @@ function renderLogging() {
   } else {
     // Set entry: stepper for reps; freeform input for timed.
     const block = h('div', { style: { textAlign: 'center', marginTop: '26px' } });
-    block.appendChild(h('div', { className: 'eyebrow' }, `Set ${setIdx + 1} of ${DEFAULT_SETS} · ${isTimed ? 'time' : 'reps'}`));
+    const setLbl = setIdx < DEFAULT_SETS ? `Set ${setIdx + 1} of ${DEFAULT_SETS}` : `Set ${setIdx + 1}`;
+    block.appendChild(h('div', { className: 'eyebrow' }, `${setLbl} · ${isTimed ? 'time' : 'reps'}`));
 
     const prevNumeric = [...result.sets].reverse().find(s => typeof s === 'number');
     const initialStr = prevNumeric != null ? (isTimed ? formatTime(prevNumeric) : String(prevNumeric)) : '';
@@ -1357,11 +1481,11 @@ function renderLogging() {
       const reps = parseInt(raw);
       if (isNaN(reps) || reps <= 0) return;
       previewEl.style.display = 'inline-flex';
-      const curVol = result.weight * reps;
+      const curVol = Math.round(toLbs(result.weight, result.weightUnit) * reps);
       previewEl.appendChild(h('span', { style: { fontSize: '14px', color: 'var(--text-muted)' } }, curVol + ' vol'));
       const lastVal = lastSets[setIdx];
       if (typeof lastVal === 'number' && lastData?.weight) {
-        const lastVol = lastData.weight * lastVal;
+        const lastVol = Math.round(toLbs(lastData.weight, lastData.weightUnit) * lastVal);
         const delta = curVol - lastVol;
         const cls = delta > 0 ? 'up' : delta < 0 ? 'down' : 'eq';
         const txt = delta > 0 ? '\u2191 ' + delta : delta === 0 ? '= last' : '\u2193 ' + Math.abs(delta);
@@ -1403,13 +1527,20 @@ function renderLogging() {
     frag.appendChild(block);
 
     const btns = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '22px' } });
-    btns.appendChild(h('button', { className: 'btn btn-primary', onClick: logSetAction }, `Log set ${setIdx + 1}`));
-    const row2 = h('div', { style: { display: 'flex', gap: '10px' } });
-    row2.appendChild(h('button', { className: 'btn btn-ghost', style: { flex: 1 }, onClick: skipSetAction }, 'Skip set'));
-    if (result.sets.length > 0) {
-      row2.appendChild(h('button', { className: 'btn btn-ghost', style: { flex: 1 }, onClick: finishEarlyAction }, 'Done with exercise'));
+    if (setIdx >= DEFAULT_SETS) {
+      // Target reached: moving on is the default, extra sets stay available
+      const isLastEx = exIdx + 1 >= exerciseList.length;
+      btns.appendChild(h('button', { className: 'btn btn-primary', onClick: finishEarlyAction }, isLastEx ? 'Finish workout' : 'Next exercise'));
+      btns.appendChild(h('button', { className: 'btn btn-soft', onClick: logSetAction }, `Log set ${setIdx + 1}`));
+    } else {
+      btns.appendChild(h('button', { className: 'btn btn-primary', onClick: logSetAction }, `Log set ${setIdx + 1}`));
+      const row2 = h('div', { style: { display: 'flex', gap: '10px' } });
+      row2.appendChild(h('button', { className: 'btn btn-ghost', style: { flex: 1 }, onClick: skipSetAction }, 'Skip set'));
+      if (result.sets.length > 0) {
+        row2.appendChild(h('button', { className: 'btn btn-ghost', style: { flex: 1 }, onClick: finishEarlyAction }, 'Done with exercise'));
+      }
+      btns.appendChild(row2);
     }
-    btns.appendChild(row2);
     frag.appendChild(btns);
   }
 
@@ -1529,11 +1660,9 @@ function logSetAction() {
   if (!newResults[exIdx].setWeights) newResults[exIdx].setWeights = [];
   newResults[exIdx].setWeights.push(newResults[exIdx].weight ?? null);
 
-  if (setIdx + 1 < DEFAULT_SETS) {
-    setState({ results: newResults, setIdx: setIdx + 1, inputVal: '' });
-  } else {
-    advanceExercise(newResults);
-  }
+  // No auto-advance after the target: extra sets stay available until
+  // "Next exercise" is tapped.
+  setState({ results: newResults, setIdx: setIdx + 1, inputVal: '' });
 }
 
 function skipSetAction() {
@@ -1598,6 +1727,7 @@ function undoAction() {
   }
 
   // First exercise with no sets, go back to edit list
+  clearInProgress();
   setState({ screen: 'editList' });
 }
 
@@ -1609,7 +1739,7 @@ function renderReview() {
   frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '15px', margin: '8px 0 16px' } }, `${state.workoutType} — confirm your entries`));
 
   // Date row
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateKey(new Date());
   const selectedDate = state.workoutDate || todayStr;
   const isToday = selectedDate === todayStr;
   const dateRow = h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px' } });
@@ -1676,7 +1806,7 @@ function renderReview() {
 
       const lastVal = lastSets[sIdx];
       const setWeight = exSetWeights[sIdx] != null ? exSetWeights[sIdx] : ex.weight;
-      const d = buildDelta(s, setWeight, lastVal, lastData?.weight, ex.type);
+      const d = buildDelta(s, setWeight, ex.weightUnit, lastVal, lastData?.weight, lastData?.weightUnit, ex.type);
       if (d) btn.appendChild(h('div', { style: { fontSize: '11px', color: d.color, marginTop: '2px', fontWeight: 600 } }, d.text));
 
       setsRow.appendChild(btn);
@@ -1697,8 +1827,10 @@ function renderReview() {
 
   frag.appendChild(h('div', { style: { height: '16px' } }));
 
-  frag.appendChild(h('button', { className: 'btn btn-primary', onClick: async () => {
-    const todayIso = new Date().toISOString().slice(0, 10);
+  const saveBtn = h('button', { className: 'btn btn-primary', onClick: async () => {
+    if (saveBtn.disabled) return;
+    saveBtn.disabled = true;
+    const todayIso = localDateKey(new Date());
     const pickedDate = state.workoutDate;
     const date = (pickedDate && pickedDate !== todayIso)
       ? new Date(pickedDate + 'T12:00:00').toISOString()
@@ -1709,10 +1841,18 @@ function renderReview() {
       notes: state.notes || '',
       exercises: state.results,
     };
-    await addWorkout(workout);
+    try {
+      await addWorkout(workout);
+    } catch {
+      alert('Could not save workout. Please try again.');
+      saveBtn.disabled = false;
+      return;
+    }
+    clearInProgress();
     const history = await getAllWorkouts();
     setState({ history, screen: 'home', workoutType: null, exerciseList: [], results: [], notes: '', workoutDate: null, showDatePicker: false });
-  }}, 'Save workout'));
+  }}, 'Save workout');
+  frag.appendChild(saveBtn);
 
   return frag;
 }
@@ -1777,6 +1917,13 @@ function renderWorkoutDetail() {
     list.appendChild(card);
   });
   frag.appendChild(list);
+
+  frag.appendChild(h('button', { className: 'btn btn-danger', style: { marginTop: '24px' }, onClick: async () => {
+    if (!confirm('Delete this workout? This cannot be undone.')) return;
+    await deleteWorkout(w.id);
+    const history = await getAllWorkouts();
+    setState({ history, screen: backScreen, viewingWorkout: null });
+  } }, 'Delete workout'));
 
   return frag;
 }
@@ -2178,11 +2325,7 @@ function renderProgressDetail(frag) {
 // INIT
 // ═══════════════════════════════════════
 async function init() {
-  let history = await getAllWorkouts();
-  if (history.length === 0) {
-    for (const s of SEED) await addWorkout(s);
-    history = await getAllWorkouts();
-  }
+  const history = await getAllWorkouts();
   const library = await seedExerciseLibrary(history);
   setState({ history, library, screen: 'home', showBackupReminder: checkBackupReminder() });
 }
