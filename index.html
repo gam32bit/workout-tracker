@@ -1302,6 +1302,7 @@ function renderEditList() {
 
   // Start
   const startBtn = h('button', { className: 'btn btn-primary', onClick: () => {
+    weightSeededExIdx = null;
     setState({
       screen: 'logging', exIdx: 0, setIdx: 0, weight: '', weightUnit: 'lbs', weightConfirmed: false, inputVal: '',
       showExerciseManager: false,
@@ -1318,6 +1319,10 @@ function renderEditList() {
 }
 
 // ─── LOGGING ───
+// Tracks which exercise the weight-entry fields were seeded for, so we only
+// initialise state.weight / state.weightUnit when entering weight entry — not
+// on every render (which would clobber in-progress edits like the unit toggle).
+let weightSeededExIdx = null;
 function renderLogging() {
   const { exerciseList, exIdx, setIdx, results, weight, weightUnit, weightConfirmed, inputVal, history } = state;
   const ex = exerciseList[exIdx];
@@ -1437,14 +1442,21 @@ function renderLogging() {
     frag.appendChild(h('div', { style: { fontSize: '14px', color: 'var(--text-muted)', marginTop: '24px', marginBottom: '8px' } }, labelText));
     const row = h('div', { style: { display: 'flex', gap: '10px', marginBottom: '14px' } });
     const initialWeight = result.weight != null ? String(result.weight) : (lastData?.weight ? String(lastData.weight) : '');
+    // Seed the editing fields once per entry into weight entry for this
+    // exercise. Re-seeding on every render would revert in-progress edits —
+    // tapping the lbs/kg toggle re-renders, so it would snap the unit (and the
+    // typed number) back to the saved value, making the toggle feel stuck.
+    if (weightSeededExIdx !== exIdx) {
+      state.weight = initialWeight;
+      if (result.weightUnit) state.weightUnit = result.weightUnit;
+      else if (lastData?.weightUnit) state.weightUnit = lastData.weightUnit;
+      weightSeededExIdx = exIdx;
+    }
     const inp = h('input', { className: 'input', type: 'number', inputMode: 'numeric', placeholder: 'Weight',
-      value: initialWeight,
+      value: state.weight,
       style: { flex: 1 } });
     inp.addEventListener('input', (e) => { state.weight = e.target.value; });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmWeightAction(); });
-    if (initialWeight) state.weight = initialWeight;
-    if (result.weightUnit) state.weightUnit = result.weightUnit;
-    else if (lastData?.weightUnit) state.weightUnit = lastData.weightUnit;
     row.appendChild(inp);
 
     const unitToggle = h('div', { style: { display: 'flex', borderRadius: '14px', overflow: 'hidden', background: 'var(--surface-alt)' } });
@@ -1460,11 +1472,14 @@ function renderLogging() {
     const btnRow = h('div', { style: { display: 'flex', gap: '10px' } });
     btnRow.appendChild(h('button', { className: 'btn btn-primary', style: { flex: 1 }, onClick: confirmWeightAction }, isEditingWeight ? 'Update weight' : 'Confirm weight'));
     if (isEditingWeight) {
-      btnRow.appendChild(h('button', { className: 'btn btn-ghost', style: { flex: '0 0 auto', padding: '18px 18px' }, onClick: () => setState({ weightConfirmed: true }) }, 'Cancel'));
+      btnRow.appendChild(h('button', { className: 'btn btn-ghost', style: { flex: '0 0 auto', width: 'auto', padding: '18px 22px' }, onClick: () => setState({ weightConfirmed: true }) }, 'Cancel'));
     }
     frag.appendChild(btnRow);
     setTimeout(() => inp.focus(), 50);
   } else {
+    // Left weight entry — clear the seed marker so re-entering (e.g. via the
+    // edit-weight control) re-initialises the fields from the saved values.
+    weightSeededExIdx = null;
     // Set entry: stepper for reps; freeform input for timed.
     const block = h('div', { style: { textAlign: 'center', marginTop: '26px' } });
     const setLbl = setIdx < DEFAULT_SETS ? `Set ${setIdx + 1} of ${DEFAULT_SETS}` : `Set ${setIdx + 1}`;
