@@ -31,6 +31,7 @@
   --coral: #E8917D;
   --amber: #E6C078;
   --blue: #7DA6E8;
+  --purple: #B58DE8;
   --danger: #E8917D;
   --danger-bg: rgba(232, 145, 125, 0.10);
   --success: #5FD3A8;
@@ -197,9 +198,10 @@ h1 { font-family: var(--font-disp); font-size: 32px; font-weight: 700; letter-sp
 // DATABASE (IndexedDB)
 // ═══════════════════════════════════════
 const DB_NAME = 'progressive-overload';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE = 'workouts';
 const EX_STORE = 'exercises';
+const TYPES_STORE = 'workoutTypes';
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -213,6 +215,9 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains(EX_STORE)) {
         db.createObjectStore(EX_STORE, { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains(TYPES_STORE)) {
+        db.createObjectStore(TYPES_STORE, { keyPath: 'name' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -307,10 +312,47 @@ async function seedExerciseLibrary(history) {
   return await getAllExercises();
 }
 
+// ─── Custom workout types ───
+async function getAllWorkoutTypes() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(TYPES_STORE, 'readonly');
+    const req = tx.objectStore(TYPES_STORE).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function putWorkoutType(t) {
+  const db = await openDB();
+  const record = { name: t.name.trim(), createdAt: t.createdAt || new Date().toISOString() };
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(TYPES_STORE, 'readwrite');
+    const req = tx.objectStore(TYPES_STORE).put(record);
+    req.onsuccess = () => resolve(record);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// Register any workout types found in history (e.g. from an import) that
+// aren't built-in templates, so they show up on the select screen.
+async function seedWorkoutTypes(history) {
+  const existing = await getAllWorkoutTypes();
+  const have = new Set([...Object.keys(TEMPLATES), ...existing.map(t => t.name)].map(n => n.toLowerCase()));
+  for (const w of history) {
+    const name = (w.workoutType || '').trim();
+    if (!name || have.has(name.toLowerCase())) continue;
+    await putWorkoutType({ name });
+    have.add(name.toLowerCase());
+  }
+  return await getAllWorkoutTypes();
+}
+
 async function exportWorkouts() {
   const workouts = await getAllWorkouts();
   const exercises = await getAllExercises();
-  const payload = { version: 2, exportedAt: new Date().toISOString(), workouts, exercises };
+  const workoutTypes = await getAllWorkoutTypes();
+  const payload = { version: 3, exportedAt: new Date().toISOString(), workouts, exercises, workoutTypes };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const date = localDateKey(new Date());
@@ -365,9 +407,18 @@ function importWorkouts() {
           await putExercise({ name: ex.name, type: ex.type || 'weighted', bilateral: ex.bilateral, createdAt: ex.createdAt });
         }
       }
+      if (Array.isArray(data.workoutTypes)) {
+        const haveTypes = new Set([...Object.keys(TEMPLATES), ...(await getAllWorkoutTypes()).map(t => t.name)].map(n => n.toLowerCase()));
+        for (const t of data.workoutTypes) {
+          if (!t || typeof t.name !== 'string' || !t.name.trim()) continue;
+          if (haveTypes.has(t.name.trim().toLowerCase())) continue;
+          await putWorkoutType({ name: t.name, createdAt: t.createdAt });
+        }
+      }
       const history = await getAllWorkouts();
       const library = await seedExerciseLibrary(history);
-      setState({ history, library });
+      const customTypes = await seedWorkoutTypes(history);
+      setState({ history, library, customTypes });
     } catch {
       alert('Could not read backup file.');
     }
@@ -550,6 +601,66 @@ const DEFAULT_SETS = 3;
 const LBS_PER_KG = 2.2046226218;
 function toLbs(weight, unit) { return unit === 'kg' ? weight * LBS_PER_KG : weight; }
 
+// Safe arithmetic evaluator for the weight input: digits, . + - * / ( ) only.
+// Lets you type plate math like "20 + 11.3 * 2". Returns a number or null.
+function evalWeightExpr(str) {
+  if (typeof str !== 'string') return null;
+  const s = str.replace(/[×x]/gi, '*').replace(/÷/g, '/').replace(/,/g, '.').replace(/\s+/g, '');
+  if (!s || !/^[\d.+\-*/()]+$/.test(s)) return null;
+  let i = 0;
+  function parseExpr() {
+    let v = parseTerm();
+    if (v === null) return null;
+    while (i < s.length && (s[i] === '+' || s[i] === '-')) {
+      const op = s[i++];
+      const t = parseTerm();
+      if (t === null) return null;
+      v = op === '+' ? v + t : v - t;
+    }
+    return v;
+  }
+  function parseTerm() {
+    let v = parseFactor();
+    if (v === null) return null;
+    while (i < s.length && (s[i] === '*' || s[i] === '/')) {
+      const op = s[i++];
+      const f = parseFactor();
+      if (f === null) return null;
+      if (op === '/' && f === 0) return null;
+      v = op === '*' ? v * f : v / f;
+    }
+    return v;
+  }
+  function parseFactor() {
+    let sign = 1;
+    while (i < s.length && (s[i] === '+' || s[i] === '-')) { if (s[i] === '-') sign = -sign; i++; }
+    if (s[i] === '(') {
+      i++;
+      const v = parseExpr();
+      if (v === null || s[i] !== ')') return null;
+      i++;
+      return sign * v;
+    }
+    const m = /^\d*\.?\d+/.exec(s.slice(i));
+    if (!m) return null;
+    i += m[0].length;
+    return sign * parseFloat(m[0]);
+  }
+  const v = parseExpr();
+  return v !== null && i === s.length && isFinite(v) ? v : null;
+}
+
+function roundWeight(v) { return Math.round(v * 100) / 100; }
+
+// Convert between units, snapping to plate-friendly increments so
+// 11.3 kg → 25 lbs (not 24.91) and 25 lbs → 11.3 kg.
+function convertWeightValue(v, from, to) {
+  if (from === to) return v;
+  return to === 'lbs'
+    ? Math.round(v * LBS_PER_KG * 4) / 4
+    : Math.round((v / LBS_PER_KG) * 10) / 10;
+}
+
 // YYYY-MM-DD in *local* time (toISOString shifts days near midnight)
 function localDateKey(d) {
   d = d instanceof Date ? d : new Date(d);
@@ -558,13 +669,22 @@ function localDateKey(d) {
 
 function formatTime(s) {
   if (s == null) return '—';
-  const m = Math.floor(s / 60), sec = s % 60;
+  const hr = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  if (hr > 0) {
+    let out = `${hr}h`;
+    if (m > 0 || sec > 0) out += String(m).padStart(2, '0') + 'm';
+    if (sec > 0) out += String(sec).padStart(2, '0') + 's';
+    return out;
+  }
   return m > 0 ? `${m}m${sec > 0 ? sec.toString().padStart(2,'0') + 's' : ''}` : `${sec}s`;
 }
 
 function parseTimeInput(str) {
   str = str.trim().toLowerCase();
   let m;
+  if ((m = str.match(/^(\d+)h\s*(\d+)m?\s*(?:(\d+)s?)?$/))) return +m[1]*3600 + +m[2]*60 + (+m[3] || 0);
+  if ((m = str.match(/^(\d+)h$/))) return +m[1]*3600;
+  if ((m = str.match(/^(\d+):(\d+):(\d+)$/))) return +m[1]*3600 + +m[2]*60 + +m[3];
   if ((m = str.match(/^(\d+)m\s*(\d+)s?$/))) return +m[1]*60 + +m[2];
   if ((m = str.match(/^(\d+):(\d+)$/))) return +m[1]*60 + +m[2];
   if ((m = str.match(/^(\d+)m$/))) return +m[1]*60;
@@ -628,7 +748,11 @@ function getWorkoutTypeColor(type) {
   if (type === 'Push + Legs') return 'var(--amber)';
   if (type === 'Pull + Core') return 'var(--jade)';
   if (type === 'Full Body') return 'var(--blue)';
-  return 'var(--text-dim)';
+  // Custom types: stable color from a hash of the name
+  let hsum = 0;
+  for (let i = 0; i < type.length; i++) hsum = (hsum * 31 + type.charCodeAt(i)) >>> 0;
+  const palette = ['var(--coral)', 'var(--purple)', 'var(--amber)', 'var(--blue)', 'var(--jade)'];
+  return palette[hsum % palette.length];
 }
 
 // ─── Drag-and-drop reorder (Pointer Events) ───
@@ -828,6 +952,26 @@ function numStepper({ value, min = 0, max = 999, step = 1, bigStep = null, onCha
 }
 
 
+// ─── Stopwatch (timed exercises) ───
+// Timestamp-based so elapsed time stays accurate across re-renders and
+// phone lock; the interval only refreshes the display.
+let stopwatch = { running: false, startTs: 0, elapsedMs: 0 };
+let stopwatchTimer = null;
+
+function stopwatchElapsed() {
+  return stopwatch.running ? stopwatch.elapsedMs + (Date.now() - stopwatch.startTs) : stopwatch.elapsedMs;
+}
+
+function resetStopwatch() {
+  stopwatch = { running: false, startTs: 0, elapsedMs: 0 };
+}
+
+function fmtStopwatch(ms) {
+  const total = Math.floor(ms / 1000);
+  const hr = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  return (hr > 0 ? hr + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(s).padStart(2, '0');
+}
+
 // ═══════════════════════════════════════
 // APP STATE & RENDERING
 // ═══════════════════════════════════════
@@ -863,6 +1007,9 @@ let state = {
   pickerNewType: 'weighted',
   pickerNewBilateral: false,
   pickerNewName: '',
+  customTypes: [],
+  showNewWorkoutSheet: false,
+  newWorkoutName: '',
 };
 
 function setState(partial) {
@@ -874,6 +1021,7 @@ function setState(partial) {
 const app = document.getElementById('app');
 
 function render() {
+  if (stopwatchTimer) { clearInterval(stopwatchTimer); stopwatchTimer = null; }
   app.innerHTML = '';
   const s = state;
   switch (s.screen) {
@@ -1066,7 +1214,7 @@ function renderSelectType() {
   frag.appendChild(h('h1', { style: { fontSize: '32px', marginTop: '6px' } }, 'Select workout'));
   frag.appendChild(h('p', { style: { color: 'var(--text-muted)', fontSize: '15px', margin: '8px 0 22px' } }, 'What are we hitting today?'));
 
-  const types = Object.keys(TEMPLATES).sort((a, b) => {
+  const types = [...new Set([...Object.keys(TEMPLATES), ...state.customTypes.map(t => t.name)])].sort((a, b) => {
     const lastA = getLastForType(state.history, a);
     const lastB = getLastForType(state.history, b);
     if (!lastA && !lastB) return 0;
@@ -1079,7 +1227,7 @@ function renderSelectType() {
   for (const type of types) {
     const last = getLastForType(state.history, type);
     const card = h('button', { className: 'card card-btn', onClick: () => {
-      const exList = last ? last.exercises.map(e => ({ name: e.name, type: e.type, bilateral: e.bilateral || false })) : TEMPLATES[type];
+      const exList = last ? last.exercises.map(e => ({ name: e.name, type: e.type, bilateral: e.bilateral || false })) : (TEMPLATES[type] || []);
       setState({ screen: 'editList', workoutType: type, exerciseList: JSON.parse(JSON.stringify(exList)) });
     }});
     card.appendChild(h('div', { className: 'disp', style: { fontSize: '20px' } }, type));
@@ -1089,7 +1237,44 @@ function renderSelectType() {
     list.appendChild(card);
   }
   frag.appendChild(list);
+
+  frag.appendChild(h('button', { className: 'btn btn-ghost', style: { marginTop: '14px', borderStyle: 'dashed' },
+    onClick: () => setState({ showNewWorkoutSheet: true, newWorkoutName: '' }) }, '+ New workout'));
+
+  if (state.showNewWorkoutSheet) frag.appendChild(renderNewWorkoutSheet());
   return frag;
+}
+
+function renderNewWorkoutSheet() {
+  const body = h('div', {});
+  body.appendChild(h('div', { className: 'eyebrow' }, 'Name'));
+  const inp = h('input', { className: 'input', placeholder: 'e.g. Bike Ride, Dance, Upper Body', style: { marginBottom: '14px', fontSize: '15px' } });
+  inp.value = state.newWorkoutName || '';
+  inp.addEventListener('input', (e) => { state.newWorkoutName = e.target.value; });
+  body.appendChild(inp);
+
+  const create = async () => {
+    const name = (inp.value || '').trim();
+    if (!name) { inp.focus(); return; }
+    const existing = [...Object.keys(TEMPLATES), ...state.customTypes.map(t => t.name)];
+    if (existing.some(t => t.toLowerCase() === name.toLowerCase())) {
+      alert('A workout with that name already exists.');
+      return;
+    }
+    await putWorkoutType({ name });
+    const customTypes = await getAllWorkoutTypes();
+    setState({
+      customTypes, showNewWorkoutSheet: false, newWorkoutName: '',
+      screen: 'editList', workoutType: name, exerciseList: [],
+    });
+  };
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') create(); });
+
+  body.appendChild(h('button', { className: 'btn btn-primary', onClick: create }, 'Create workout'));
+  body.appendChild(h('div', { style: { fontSize: '13px', color: 'var(--text-dim)', marginTop: '12px', lineHeight: 1.5 } },
+    'You\'ll pick exercises next. For activities like a bike ride or dance session, create a timed exercise and use the stopwatch.'));
+  setTimeout(() => inp.focus(), 50);
+  return renderSheet('New workout', body, { onClose: () => setState({ showNewWorkoutSheet: false }) });
 }
 
 // ─── OVERLAY SHEETS ───
@@ -1303,6 +1488,7 @@ function renderEditList() {
   // Start
   const startBtn = h('button', { className: 'btn btn-primary', onClick: () => {
     weightSeededExIdx = null;
+    resetStopwatch();
     setState({
       screen: 'logging', exIdx: 0, setIdx: 0, weight: '', weightUnit: 'lbs', weightConfirmed: false, inputVal: '',
       showExerciseManager: false,
@@ -1452,10 +1638,23 @@ function renderLogging() {
       else if (lastData?.weightUnit) state.weightUnit = lastData.weightUnit;
       weightSeededExIdx = exIdx;
     }
-    const inp = h('input', { className: 'input', type: 'number', inputMode: 'numeric', placeholder: 'Weight',
+    const inp = h('input', { className: 'input', type: 'text', placeholder: 'e.g. 45 or 20+11.3*2',
       value: state.weight,
       style: { flex: 1 } });
-    inp.addEventListener('input', (e) => { state.weight = e.target.value; });
+    // Live "= result" hint when the input is a calculation (e.g. 20+11.3*2)
+    const exprHint = h('div', { style: { fontSize: '13px', color: 'var(--jade)', fontWeight: 600, margin: '-6px 2px 12px', display: 'none' } });
+    const updateExprHint = () => {
+      const raw = (state.weight || '').trim();
+      const isExpr = /[+*/(]/.test(raw) || raw.slice(1).includes('-');
+      const v = evalWeightExpr(raw);
+      if (isExpr && v != null && v > 0) {
+        exprHint.textContent = `= ${roundWeight(v)} ${state.weightUnit}`;
+        exprHint.style.display = 'block';
+      } else {
+        exprHint.style.display = 'none';
+      }
+    };
+    inp.addEventListener('input', (e) => { state.weight = e.target.value; updateExprHint(); });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmWeightAction(); });
     row.appendChild(inp);
 
@@ -1463,11 +1662,21 @@ function renderLogging() {
     ['lbs', 'kg'].forEach(u => {
       unitToggle.appendChild(h('button', {
         style: { padding: '12px 16px', background: state.weightUnit === u ? 'var(--jade-soft)' : 'transparent', color: state.weightUnit === u ? 'var(--jade)' : 'var(--text-muted)', border: 'none', fontSize: '14px', fontWeight: 600, fontFamily: 'var(--font-ui)' },
-        onClick: () => { state.weightUnit = u; render(); }
+        onClick: () => {
+          if (u !== state.weightUnit) {
+            // Convert the entered value so 11.3 kg becomes 25 lbs, not "11.3 lbs"
+            const v = evalWeightExpr(state.weight);
+            if (v != null && v > 0) state.weight = String(convertWeightValue(v, state.weightUnit, u));
+            state.weightUnit = u;
+          }
+          render();
+        }
       }, u));
     });
     row.appendChild(unitToggle);
     frag.appendChild(row);
+    frag.appendChild(exprHint);
+    updateExprHint();
 
     const btnRow = h('div', { style: { display: 'flex', gap: '10px' } });
     btnRow.appendChild(h('button', { className: 'btn btn-primary', style: { flex: 1 }, onClick: confirmWeightAction }, isEditingWeight ? 'Update weight' : 'Confirm weight'));
@@ -1509,16 +1718,54 @@ function renderLogging() {
     }
 
     if (isTimed) {
-      state.inputVal = initialStr;
+      // Keep a stopwatch-filled (or typed) value across re-renders; only seed
+      // from the previous set when there's nothing entered yet.
+      if (!state.inputVal) state.inputVal = initialStr;
       const inp = h('input', { className: 'input', type: 'text', inputMode: 'text',
         placeholder: 'e.g. 1m15s or 75',
-        value: initialStr,
+        value: state.inputVal,
         style: { marginTop: '14px', textAlign: 'center', fontSize: '28px', fontFamily: 'var(--font-disp)' } });
       inp.addEventListener('input', (e) => { state.inputVal = e.target.value; });
       inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && state.inputVal) logSetAction(); });
       inp.addEventListener('focus', () => inp.select());
       block.appendChild(inp);
-      setTimeout(() => inp.focus(), 50);
+
+      // Stopwatch: pause fills the time input; Log set records it.
+      const swWrap = h('div', { style: { marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' } });
+      const swDisplay = h('div', { className: 'num', style: { fontSize: '44px', lineHeight: 1, color: stopwatch.running ? 'var(--jade)' : 'var(--text)' } }, fmtStopwatch(stopwatchElapsed()));
+      swWrap.appendChild(swDisplay);
+      const swRow = h('div', { style: { display: 'flex', gap: '10px', justifyContent: 'center' } });
+      swRow.appendChild(h('button', {
+        className: 'btn ' + (stopwatch.running ? 'btn-soft' : 'btn-primary'),
+        style: { width: 'auto', padding: '12px 26px', fontSize: '15px' },
+        onClick: () => {
+          if (stopwatch.running) {
+            stopwatch.elapsedMs += Date.now() - stopwatch.startTs;
+            stopwatch.running = false;
+            const secs = Math.round(stopwatch.elapsedMs / 1000);
+            if (secs > 0) state.inputVal = formatTime(secs);
+          } else {
+            stopwatch.startTs = Date.now();
+            stopwatch.running = true;
+          }
+          setState({});
+        }
+      }, stopwatch.running ? 'Pause' : (stopwatch.elapsedMs > 0 ? 'Resume' : 'Start stopwatch')));
+      if (stopwatch.running || stopwatch.elapsedMs > 0) {
+        swRow.appendChild(h('button', { className: 'btn btn-ghost', style: { width: 'auto', padding: '12px 20px', fontSize: '15px' },
+          onClick: () => { resetStopwatch(); setState({}); } }, 'Reset'));
+      }
+      swWrap.appendChild(swRow);
+      if (stopwatch.running || stopwatch.elapsedMs > 0) {
+        swWrap.appendChild(h('div', { style: { fontSize: '12px', color: 'var(--text-dim)' } }, 'Pause fills the time above, then log the set'));
+      }
+      block.appendChild(swWrap);
+      if (stopwatch.running) {
+        stopwatchTimer = setInterval(() => { swDisplay.textContent = fmtStopwatch(stopwatchElapsed()); }, 250);
+      }
+
+      // Don't pop the keyboard while the stopwatch is in use
+      if (!stopwatch.running && stopwatch.elapsedMs === 0) setTimeout(() => inp.focus(), 50);
     } else {
       const startV = parseInt(initialStr);
       const initV = !isNaN(startV) ? startV : 0;
@@ -1656,10 +1903,10 @@ function renderLogging() {
 }
 
 function confirmWeightAction() {
-  const w = parseFloat(state.weight);
-  if (isNaN(w) || w <= 0) return;
+  const w = evalWeightExpr(state.weight);
+  if (w == null || w <= 0) return;
   const results = [...state.results];
-  results[state.exIdx] = { ...results[state.exIdx], weight: w, weightUnit: state.weightUnit };
+  results[state.exIdx] = { ...results[state.exIdx], weight: roundWeight(w), weightUnit: state.weightUnit };
   setState({ results, weightConfirmed: true });
 }
 
@@ -1677,10 +1924,12 @@ function logSetAction() {
 
   // No auto-advance after the target: extra sets stay available until
   // "Next exercise" is tapped.
+  resetStopwatch();
   setState({ results: newResults, setIdx: setIdx + 1, inputVal: '' });
 }
 
 function skipSetAction() {
+  resetStopwatch();
   const newResults = JSON.parse(JSON.stringify(state.results));
   newResults[state.exIdx].sets.push('skip');
   if (!newResults[state.exIdx].setWeights) newResults[state.exIdx].setWeights = [];
@@ -1695,6 +1944,7 @@ function skipSetAction() {
 function finishEarlyAction() { advanceExercise(state.results); }
 
 function advanceExercise(results) {
+  resetStopwatch();
   if (state.exIdx + 1 < state.exerciseList.length) {
     setState({ results, exIdx: state.exIdx + 1, setIdx: 0, weight: '', weightUnit: 'lbs', weightConfirmed: false, inputVal: '' });
   } else {
@@ -1703,6 +1953,7 @@ function advanceExercise(results) {
 }
 
 function undoAction() {
+  resetStopwatch();
   const { exIdx, results, exerciseList } = state;
   const result = results[exIdx];
 
@@ -2052,9 +2303,10 @@ function renderProgress() {
   }
   frag.appendChild(grid);
 
-  // Legend
+  // Legend — built from the types actually present this month
+  const legendTypes = [...new Set(monthWorkouts.map(w => w.workoutType))];
   const legend = h('div', { style: { display: 'flex', gap: '14px', justifyContent: 'center', marginBottom: '18px', flexWrap: 'wrap' } });
-  [['Push + Legs', 'var(--amber)'], ['Pull + Core', 'var(--jade)'], ['Full Body', 'var(--blue)']].forEach(([label, color]) => {
+  legendTypes.map(t => [t, getWorkoutTypeColor(t)]).forEach(([label, color]) => {
     const item = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } });
     item.appendChild(h('div', { style: { width: '10px', height: '10px', borderRadius: '3px', background: color } }));
     item.appendChild(h('span', { style: { fontSize: '12px', color: 'var(--text-muted)' } }, label));
@@ -2342,7 +2594,8 @@ function renderProgressDetail(frag) {
 async function init() {
   const history = await getAllWorkouts();
   const library = await seedExerciseLibrary(history);
-  setState({ history, library, screen: 'home', showBackupReminder: checkBackupReminder() });
+  const customTypes = await seedWorkoutTypes(history);
+  setState({ history, library, customTypes, screen: 'home', showBackupReminder: checkBackupReminder() });
 }
 
 init();
