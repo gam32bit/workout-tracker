@@ -711,18 +711,27 @@ function getExHistory(history, name) {
 
 function buildDelta(curVal, curWeight, curUnit, lastVal, lastWeight, lastUnit, type) {
   if (typeof curVal !== 'number' || typeof lastVal !== 'number') return null;
-  let delta, text;
+  let delta, text, sub = null;
   if (type === 'weighted' && typeof curWeight === 'number' && typeof lastWeight === 'number') {
     const curVol = Math.round(curVal * toLbs(curWeight, curUnit));
     const lastVol = Math.round(lastVal * toLbs(lastWeight, lastUnit));
     delta = curVol - lastVol;
     text = delta > 0 ? `+${delta} vol` : delta === 0 ? '= vol' : `${delta} vol`;
+    const curE = calcE1RM(curWeight, curUnit, curVal);
+    const lastE = calcE1RM(lastWeight, lastUnit, lastVal);
+    if (curE > 0 && lastE > 0) {
+      const eDelta = curE - lastE;
+      sub = {
+        text: eDelta > 0 ? `+${eDelta} 1RM` : eDelta === 0 ? '= 1RM' : `${eDelta} 1RM`,
+        color: eDelta > 0 ? 'var(--success)' : eDelta < 0 ? 'var(--danger)' : 'var(--text-subtle)',
+      };
+    }
   } else {
     delta = curVal - lastVal;
     text = delta > 0 ? `+${delta}` : delta === 0 ? '=' : String(delta);
   }
   const color = delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-subtle)';
-  return { text, color };
+  return { text, color, sub };
 }
 
 function dateLbl(iso) { const d = new Date(iso); return `${d.getMonth()+1}/${d.getDate()}`; }
@@ -735,6 +744,12 @@ function getMonthWorkouts(history, year, month) {
     const d = new Date(w.date);
     return d.getFullYear() === year && d.getMonth() === month;
   });
+}
+
+// Epley estimated 1RM, normalized to lbs (same as volume) so kg/lbs sessions compare
+function calcE1RM(weight, unit, reps) {
+  if (typeof weight !== 'number' || typeof reps !== 'number' || reps <= 0) return 0;
+  return Math.round(toLbs(weight, unit) * (1 + reps / 30));
 }
 
 // Volume normalized to lbs so kg and lbs sessions are comparable
@@ -1607,6 +1622,7 @@ function renderLogging() {
       const setWeight = (result.setWeights && result.setWeights[i] != null) ? result.setWeights[i] : result.weight;
       const d = buildDelta(s, setWeight, result.weightUnit, lastVal, lastData?.weight, lastData?.weightUnit, ex.type);
       if (d) box.appendChild(h('div', { style: { fontSize: '11px', color: d.color, marginTop: '2px', fontWeight: 600 } }, d.text));
+      if (d && d.sub) box.appendChild(h('div', { style: { fontSize: '11px', color: d.sub.color, fontWeight: 600 } }, d.sub.text));
 
       const resultSetWeights = result.setWeights || [];
       const uniqRW = resultSetWeights.filter(w => w != null).filter((w, j, a) => a.indexOf(w) === j);
@@ -2074,6 +2090,7 @@ function renderReview() {
       const setWeight = exSetWeights[sIdx] != null ? exSetWeights[sIdx] : ex.weight;
       const d = buildDelta(s, setWeight, ex.weightUnit, lastVal, lastData?.weight, lastData?.weightUnit, ex.type);
       if (d) btn.appendChild(h('div', { style: { fontSize: '11px', color: d.color, marginTop: '2px', fontWeight: 600 } }, d.text));
+      if (d && d.sub) btn.appendChild(h('div', { style: { fontSize: '11px', color: d.sub.color, fontWeight: 600 } }, d.sub.text));
 
       setsRow.appendChild(btn);
     });
