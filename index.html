@@ -69,6 +69,21 @@ body {
 button { font-family: var(--font-ui); cursor: pointer; -webkit-appearance: none; }
 input, textarea { font-family: var(--font-ui); -webkit-appearance: none; }
 
+/* The appearance reset above erases the native checkbox on WebKit, so draw
+   our own box that matches the dark theme on every browser. */
+.checkbox {
+  -webkit-appearance: none; appearance: none;
+  width: 22px; height: 22px; flex-shrink: 0; margin: 0; position: relative;
+  border: 1.5px solid var(--line); border-radius: 7px; background: var(--surface-alt);
+  cursor: pointer; transition: background 0.15s, border-color 0.15s;
+}
+.checkbox:checked { background: var(--jade); border-color: var(--jade); }
+.checkbox:checked::after {
+  content: ''; position: absolute; left: 7px; top: 3px; width: 5px; height: 10px;
+  border: solid var(--accent-ink); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg);
+}
+.checkbox:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; }
+
 .disp { font-family: var(--font-disp); font-weight: 700; line-height: 1.04; letter-spacing: -0.02em; }
 .num { font-family: var(--font-disp); font-variant-numeric: tabular-nums; font-weight: 600; }
 
@@ -970,15 +985,37 @@ function numStepper({ value, min = 0, max = 999, step = 1, bigStep = null, onCha
 // ─── Stopwatch (timed exercises) ───
 // Timestamp-based so elapsed time stays accurate across re-renders and
 // phone lock; the interval only refreshes the display.
-let stopwatch = { running: false, startTs: 0, elapsedMs: 0 };
+let stopwatch = { running: false, startTs: 0, elapsedMs: 0, countdownEndTs: 0 };
 let stopwatchTimer = null;
+
+// Lead-in so you can get into position before timing starts.
+const STOPWATCH_LEAD_IN_MS = 5000;
 
 function stopwatchElapsed() {
   return stopwatch.running ? stopwatch.elapsedMs + (Date.now() - stopwatch.startTs) : stopwatch.elapsedMs;
 }
 
 function resetStopwatch() {
-  stopwatch = { running: false, startTs: 0, elapsedMs: 0 };
+  stopwatch = { running: false, startTs: 0, elapsedMs: 0, countdownEndTs: 0 };
+}
+
+function countdownRemaining() {
+  return stopwatch.countdownEndTs ? Math.max(0, stopwatch.countdownEndTs - Date.now()) : 0;
+}
+
+function beginStopwatchCountdown() {
+  stopwatch.countdownEndTs = Date.now() + STOPWATCH_LEAD_IN_MS;
+  stopwatch.running = false;
+}
+
+// Start timing. If the lead-in already elapsed (tick delayed, screen locked)
+// count from when it ended so no time is lost; skipping early starts now.
+function startStopwatchNow() {
+  const end = stopwatch.countdownEndTs;
+  stopwatch.startTs = end && end <= Date.now() ? end : Date.now();
+  stopwatch.countdownEndTs = 0;
+  stopwatch.running = true;
+  if (navigator.vibrate) { try { navigator.vibrate(40); } catch (e) {} }
 }
 
 function fmtStopwatch(ms) {
@@ -1415,7 +1452,7 @@ function renderExercisePicker() {
     body.appendChild(typeRow);
 
     const bilatRow = h('label', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-muted)' } });
-    const cb = h('input', { type: 'checkbox', style: { width: '18px', height: '18px', accentColor: 'var(--jade)' } });
+    const cb = h('input', { type: 'checkbox', className: 'checkbox' });
     cb.checked = !!state.pickerNewBilateral;
     cb.addEventListener('change', (e) => { state.pickerNewBilateral = e.target.checked; });
     bilatRow.appendChild(cb);
@@ -1746,42 +1783,61 @@ function renderLogging() {
       inp.addEventListener('focus', () => inp.select());
       block.appendChild(inp);
 
-      // Stopwatch: pause fills the time input; Log set records it.
+      // Stopwatch: start runs a 5s lead-in, pause fills the time input,
+      // Log set records it.
+      // A countdown left running when the screen was rebuilt has already
+      // expired — turn it into a running watch rather than showing a stale 0.
+      if (stopwatch.countdownEndTs && countdownRemaining() <= 0) startStopwatchNow();
+      const counting = stopwatch.countdownEndTs > 0;
+
       const swWrap = h('div', { style: { marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' } });
-      const swDisplay = h('div', { className: 'num', style: { fontSize: '44px', lineHeight: 1, color: stopwatch.running ? 'var(--jade)' : 'var(--text)' } }, fmtStopwatch(stopwatchElapsed()));
+      const swDisplay = h('div', { className: 'num', style: { fontSize: counting ? '64px' : '44px', lineHeight: 1, color: (stopwatch.running || counting) ? 'var(--jade)' : 'var(--text)' } },
+        counting ? String(Math.ceil(countdownRemaining() / 1000)) : fmtStopwatch(stopwatchElapsed()));
       swWrap.appendChild(swDisplay);
       const swRow = h('div', { style: { display: 'flex', gap: '10px', justifyContent: 'center' } });
-      swRow.appendChild(h('button', {
-        className: 'btn ' + (stopwatch.running ? 'btn-soft' : 'btn-primary'),
-        style: { width: 'auto', padding: '12px 26px', fontSize: '15px' },
-        onClick: () => {
-          if (stopwatch.running) {
-            stopwatch.elapsedMs += Date.now() - stopwatch.startTs;
-            stopwatch.running = false;
-            const secs = Math.round(stopwatch.elapsedMs / 1000);
-            if (secs > 0) state.inputVal = formatTime(secs);
-          } else {
-            stopwatch.startTs = Date.now();
-            stopwatch.running = true;
-          }
-          setState({});
-        }
-      }, stopwatch.running ? 'Pause' : (stopwatch.elapsedMs > 0 ? 'Resume' : 'Start stopwatch')));
-      if (stopwatch.running || stopwatch.elapsedMs > 0) {
+      if (counting) {
+        swRow.appendChild(h('button', { className: 'btn btn-primary', style: { width: 'auto', padding: '12px 26px', fontSize: '15px' },
+          onClick: () => { startStopwatchNow(); setState({}); } }, 'Start now'));
         swRow.appendChild(h('button', { className: 'btn btn-ghost', style: { width: 'auto', padding: '12px 20px', fontSize: '15px' },
-          onClick: () => { resetStopwatch(); setState({}); } }, 'Reset'));
+          onClick: () => { stopwatch.countdownEndTs = 0; setState({}); } }, 'Cancel'));
+      } else {
+        swRow.appendChild(h('button', {
+          className: 'btn ' + (stopwatch.running ? 'btn-soft' : 'btn-primary'),
+          style: { width: 'auto', padding: '12px 26px', fontSize: '15px' },
+          onClick: () => {
+            if (stopwatch.running) {
+              stopwatch.elapsedMs += Date.now() - stopwatch.startTs;
+              stopwatch.running = false;
+              const secs = Math.round(stopwatch.elapsedMs / 1000);
+              if (secs > 0) state.inputVal = formatTime(secs);
+            } else {
+              beginStopwatchCountdown();
+            }
+            setState({});
+          }
+        }, stopwatch.running ? 'Pause' : (stopwatch.elapsedMs > 0 ? 'Resume' : 'Start stopwatch')));
+        if (stopwatch.running || stopwatch.elapsedMs > 0) {
+          swRow.appendChild(h('button', { className: 'btn btn-ghost', style: { width: 'auto', padding: '12px 20px', fontSize: '15px' },
+            onClick: () => { resetStopwatch(); setState({}); } }, 'Reset'));
+        }
       }
       swWrap.appendChild(swRow);
-      if (stopwatch.running || stopwatch.elapsedMs > 0) {
-        swWrap.appendChild(h('div', { style: { fontSize: '12px', color: 'var(--text-dim)' } }, 'Pause fills the time above, then log the set'));
-      }
+      const swHint = counting ? 'Get set — timing starts at zero'
+        : (stopwatch.running || stopwatch.elapsedMs > 0) ? 'Pause fills the time above, then log the set' : null;
+      if (swHint) swWrap.appendChild(h('div', { style: { fontSize: '12px', color: 'var(--text-dim)' } }, swHint));
       block.appendChild(swWrap);
-      if (stopwatch.running) {
+      if (counting) {
+        stopwatchTimer = setInterval(() => {
+          const rem = countdownRemaining();
+          if (rem <= 0) { startStopwatchNow(); setState({}); return; }
+          swDisplay.textContent = String(Math.ceil(rem / 1000));
+        }, 100);
+      } else if (stopwatch.running) {
         stopwatchTimer = setInterval(() => { swDisplay.textContent = fmtStopwatch(stopwatchElapsed()); }, 250);
       }
 
       // Don't pop the keyboard while the stopwatch is in use
-      if (!stopwatch.running && stopwatch.elapsedMs === 0) setTimeout(() => inp.focus(), 50);
+      if (!stopwatch.running && !counting && stopwatch.elapsedMs === 0) setTimeout(() => inp.focus(), 50);
     } else {
       const startV = parseInt(initialStr);
       const initV = !isNaN(startV) ? startV : 0;
