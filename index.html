@@ -749,6 +749,45 @@ function buildDelta(curVal, curWeight, curUnit, lastVal, lastWeight, lastUnit, t
   return { text, color, sub };
 }
 
+// ─── Per-set trends ───
+// How many past sessions of an exercise the logging screen looks back over.
+const TREND_WINDOW = 6;
+
+// Pull one set position (set 1, set 2, …) out of an exercise's history, oldest
+// first, so it can be read as "how this set has gone lately". Sessions that
+// skipped the set are left out rather than counted as a drop.
+function getSetSeries(hist, setIdx, n = TREND_WINDOW) {
+  const out = [];
+  for (const s of hist) {
+    const v = s.sets?.[setIdx];
+    if (typeof v !== 'number') continue;
+    const sw = s.setWeights?.[setIdx];
+    out.push({ date: s.date, val: v, weight: sw != null ? sw : s.weight, weightUnit: s.weightUnit });
+  }
+  return out.slice(-n);
+}
+
+// One-line read on a set position: parked on the same number, climbing or
+// sliding several sessions running, or simply up/down from last time.
+function trendSummary(vals, type) {
+  if (!vals || vals.length < 2) return null;
+  const n = vals.length, last = vals[n - 1];
+  let same = 1;
+  while (same < n && vals[n - 1 - same] === last) same++;
+  if (same >= 2) return { text: `same ×${same}`, color: 'var(--text-muted)' };
+  let up = 0;
+  while (up < n - 1 && vals[n - 1 - up] > vals[n - 2 - up]) up++;
+  if (up >= 2) return { text: `↑ ${up + 1} in a row`, color: 'var(--success)' };
+  let down = 0;
+  while (down < n - 1 && vals[n - 1 - down] < vals[n - 2 - down]) down++;
+  if (down >= 2) return { text: `↓ ${down + 1} in a row`, color: 'var(--danger)' };
+  const prev = vals[n - 2];
+  return {
+    text: `${last > prev ? '↑' : '↓'} from ${fmtVal(prev, type)}`,
+    color: last > prev ? 'var(--success)' : 'var(--danger)',
+  };
+}
+
 function dateLbl(iso) { const d = new Date(iso); return `${d.getMonth()+1}/${d.getDate()}`; }
 
 function pillClass(type) { return type === 'weighted' ? 'pill-weight' : type === 'timed' ? 'pill-timed' : 'pill-reps'; }
@@ -948,6 +987,27 @@ function areaChart(data, { color = 'var(--jade)', width = 320, height = 110, dot
   );
 }
 
+// Tiny sparkline for a set-box — stretches to whatever width it lands in.
+// Strokes are non-scaling so the line keeps its weight and the end marker (a
+// zero-length round-capped segment) stays a circle however far it's squashed.
+function microSpark(vals, { color = 'var(--text-muted)', dotColor = 'var(--jade)', height = 20 } = {}) {
+  if (!vals || vals.length < 2) return null;
+  const W = 100, H = height, padX = 2, padY = 3;
+  const max = Math.max(...vals), min = Math.min(...vals);
+  const span = max - min;
+  const x = i => padX + (i * (W - padX * 2)) / (vals.length - 1);
+  const y = v => span === 0 ? H / 2 : H - padY - ((v - min) / span) * (H - padY * 2);
+  const d = vals.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+  const ex = x(vals.length - 1).toFixed(1), ey = y(vals[vals.length - 1]).toFixed(1);
+  return sv('svg', { width: '100%', height: H, viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none',
+    style: `display:block;height:${H}px;overflow:visible` },
+    sv('path', { d, fill: 'none', stroke: color, 'stroke-width': '1.6', 'stroke-linecap': 'round',
+      'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke', opacity: '0.85' }),
+    sv('path', { d: `M${ex} ${ey} L${ex} ${ey}`, stroke: dotColor, 'stroke-width': '5',
+      'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke' }),
+  );
+}
+
 // Numeric stepper: − [tappable num] +. Tapping the num focuses an invisible
 // numeric input so the OS keyboard can override the stepped value.
 function numStepper({ value, min = 0, max = 999, step = 1, bigStep = null, onChange }) {
@@ -1050,6 +1110,7 @@ let state = {
   viewingWorkoutFrom: 'home',
   allWorkoutsLimit: 10,
   showExerciseManager: false,
+  showExTrend: false,
   library: [],
   showNotesSheet: false,
   showExercisePicker: false,
@@ -1627,20 +1688,67 @@ function renderLogging() {
   }
   frag.appendChild(titleRow);
 
-  // Last time overview
+  // Last time overview — big number is the most recent session, with a
+  // sparkline + one-line read underneath showing where that set has been
+  // heading, and the session-by-session numbers a tap away.
   if (lastSets.length > 0) {
     const lastBox = h('div', { className: 'card', style: { marginTop: '20px' } });
     lastBox.appendChild(h('div', { className: 'eyebrow', style: { marginBottom: '14px' } }, `Last time${lastData?.weight ? ` · ${lastData.weight} ${lastData.weightUnit || 'lbs'}` : ''}`));
-    const setsRow = h('div', { style: { display: 'flex', gap: '10px' } });
+    const setsRow = h('div', { style: { display: 'flex', gap: '10px', alignItems: 'stretch' } });
     lastSets.forEach((s, i) => {
       const isActive = i === setIdx && result.sets.length === 0;
       const cls = isActive ? 'set-box set-box-active' : 'set-box';
       const box = h('div', { className: cls });
       box.appendChild(h('div', { className: 'num', style: { fontSize: '24px', color: isActive ? 'var(--jade)' : 'var(--text)' } }, fmtVal(s, ex.type)));
       box.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' } }, `Set ${i + 1}`));
+
+      const vals = getSetSeries(hist, i).map(p => p.val);
+      const trend = trendSummary(vals, ex.type);
+      if (trend) {
+        box.appendChild(h('div', { style: { padding: '0 10px', marginTop: '9px' } },
+          microSpark(vals, { color: trend.color, dotColor: isActive ? 'var(--jade)' : 'var(--text)' })));
+        box.appendChild(h('div', { style: { fontSize: '11px', color: trend.color, marginTop: '3px', fontWeight: 600, lineHeight: '1.3', padding: '0 4px' } }, trend.text));
+      }
       setsRow.appendChild(box);
     });
     lastBox.appendChild(setsRow);
+
+    // Session-by-session detail, collapsed by default so the screen stays
+    // scannable between sets.
+    const recent = hist.slice(-TREND_WINDOW).reverse();
+    if (recent.length >= 2) {
+      lastBox.appendChild(h('button', {
+        style: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-ui)', padding: '12px 0 0', cursor: 'pointer' },
+        onClick: () => setState({ showExTrend: !state.showExTrend })
+      }, state.showExTrend ? 'Hide session history ▲' : `Show last ${recent.length} sessions ▼`));
+
+      if (state.showExTrend) {
+        const list = h('div', { style: { marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '9px' } });
+        recent.forEach((s, rIdx) => {
+          const isMostRecent = rIdx === 0;
+          const row = h('div', { style: { display: 'flex', alignItems: 'baseline', gap: '10px' } });
+          row.appendChild(h('div', { className: 'num', style: { fontSize: '12px', width: '38px', flexShrink: 0, color: isMostRecent ? 'var(--text)' : 'var(--text-dim)' } }, dateLbl(s.date)));
+          if (s.weight != null) {
+            row.appendChild(h('div', { className: 'num', style: { fontSize: '12px', width: '62px', flexShrink: 0, color: 'var(--text-muted)' } }, `${s.weight} ${s.weightUnit || 'lbs'}`));
+          }
+          const setsTxt = h('div', { style: { display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' } });
+          (s.sets || []).forEach((v, j) => {
+            if (j > 0) setsTxt.appendChild(h('span', { style: { fontSize: '12px', color: 'var(--text-dim)' } }, '·'));
+            const isCurrentSet = j === setIdx;
+            setsTxt.appendChild(h('span', { className: 'num', style: {
+              fontSize: '13px',
+              fontWeight: isCurrentSet ? 700 : 500,
+              color: v === 'skip' ? 'var(--warn)' : isCurrentSet ? 'var(--jade)' : isMostRecent ? 'var(--text)' : 'var(--text-muted)',
+            } }, fmtVal(v, ex.type)));
+          });
+          row.appendChild(setsTxt);
+          list.appendChild(row);
+        });
+        lastBox.appendChild(list);
+        lastBox.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--text-dim)', marginTop: '10px' } }, `Set ${setIdx + 1} highlighted · newest first`));
+      }
+    }
+
     frag.appendChild(lastBox);
   }
 
