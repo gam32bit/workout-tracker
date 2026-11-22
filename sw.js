@@ -1,4 +1,4 @@
-const CACHE_NAME = 'overload-v5';
+const CACHE_NAME = 'overload-v6';
 const ASSETS = [
   './',
   './index.html',
