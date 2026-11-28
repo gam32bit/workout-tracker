@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#131519">
@@ -1406,7 +1406,10 @@ function renderNewWorkoutSheet() {
 function renderSheet(title, bodyEl, opts = {}) {
   const onClose = opts.onClose || (() => {});
   const backdrop = h('div', { style: {
-    position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.6)', zIndex: '100',
+    // Track the visual viewport so the sheet sits above the on-screen keyboard
+    // (see syncViewportVars) instead of being covered by it.
+    position: 'fixed', left: '0', right: '0', top: 'var(--vv-top, 0px)', height: 'var(--vv-height, 100%)',
+    background: 'rgba(0,0,0,0.6)', zIndex: '100',
     display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
     animation: 'fadeIn 0.15s ease',
   } });
@@ -1414,7 +1417,7 @@ function renderSheet(title, bodyEl, opts = {}) {
   const sheet = h('div', { style: {
     background: 'var(--surface)', border: 'none',
     borderRadius: '20px 20px 0 0', padding: '20px 22px',
-    width: '100%', maxWidth: '430px', maxHeight: '80vh', overflow: 'auto',
+    width: '100%', maxWidth: '430px', maxHeight: '85%', overflow: 'auto',
     paddingBottom: 'max(24px, env(safe-area-inset-bottom))',
   } });
   const header = h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' } });
@@ -2856,6 +2859,22 @@ function renderProgressDetail(frag) {
 // ═══════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════
+// Expose the visible area (excluding the on-screen keyboard) as CSS vars.
+// iOS Safari and some Android browsers shrink only the visual viewport when the
+// keyboard opens, so fixed bottom sheets would otherwise end up behind it.
+function syncViewportVars() {
+  const vv = window.visualViewport;
+  const root = document.documentElement.style;
+  if (!vv) return;
+  root.setProperty('--vv-top', vv.offsetTop + 'px');
+  root.setProperty('--vv-height', vv.height + 'px');
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', syncViewportVars);
+  window.visualViewport.addEventListener('scroll', syncViewportVars);
+  syncViewportVars();
+}
+
 async function init() {
   const history = await getAllWorkouts();
   const library = await seedExerciseLibrary(history);
